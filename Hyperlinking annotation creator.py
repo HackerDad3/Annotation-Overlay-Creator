@@ -4,14 +4,14 @@ import json
 from time import time
 import os
 
-# Set the user email as a variable
+# User email to show in notes
 user_email = "william@advancediscovery.io"
 
 # File paths
 input_csv = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
 pdf_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\LAY.WCH.001.0001.pdf"
 
-# Get the file name without extension for the "Begin Bates" column
+# Get the file name without extension for the "bates control #" column
 pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_file))[0]
 
 # Open the PDF file
@@ -63,7 +63,7 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
 with open(input_csv, newline='') as csvfile:
     reader = csv.DictReader(csvfile)
 
-    # For each row in the CSV (each phrase-link pair)
+    # For each row in the CSV (each phrase-link pair).  May need to update these to new names.  Check with Ben
     for row in reader:
         phrase = row['Phrase']
         link = row['Link']
@@ -78,7 +78,7 @@ with open(input_csv, newline='') as csvfile:
             if instances:
                 # For each instance of the phrase found, generate annotation data
                 for inst in instances:
-                    rect = fitz.Rect(inst)  # Bounding box as a rectangle object
+                    rect = fitz.Rect(inst)  # bounding box as a rectangle object
                     annotation_data = create_annotation_data(rect, page_num, phrase, link)
                     all_annotations.append(annotation_data)
 
