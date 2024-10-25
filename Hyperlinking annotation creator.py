@@ -84,13 +84,13 @@ if all_annotations:
 
     # Prepare the output CSV row
     output_data = {
-        'Begin Bates': pdf_filename_no_ext,
+        'Bates/Control #': pdf_filename_no_ext,
         'Annotation Data': annotation_json
     }
 
     # Save the annotation data to the output CSV
     with open(output_csv, mode='w', newline='') as csvfile:
-        fieldnames = ['Begin Bates', 'Annotation Data']
+        fieldnames = ['Bates/Control #', 'Annotation Data']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         # Write the header
