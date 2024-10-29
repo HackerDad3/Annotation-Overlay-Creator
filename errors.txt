@@ -11,3 +11,6 @@ Traceback (most recent call last):
   File "C:\Program Files\Python312\Lib\re\_parser.py", line 1068, in parse_template
     raise s.error('bad escape %s' % this, len(this)) from None
 re.error: bad escape \s at position 1
+
+
+BYE7ubc.tbj3qgk1nbq
