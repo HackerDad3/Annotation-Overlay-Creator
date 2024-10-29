@@ -1,7 +1,7 @@
 Traceback (most recent call last):
-  File "D:\Python Annotation Creator\Hyperlinking Annotation Creator.py", line 84, in <module>
-    phrase_pattern = re.sub(r'[\s\[\],]', r'[\s\[\],-]*', re.escape(phrase))
-                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Python Annotation Creator\Hyperlinking Annotation Creator.py", line 78, in <module>
+    phrase_pattern = re.sub(r'\s+', r'[\s\n]+', re.escape(phrase))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "C:\Program Files\Python312\Lib\re\__init__.py", line 186, in sub
     return _compile(pattern, flags).sub(repl, string, count)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
