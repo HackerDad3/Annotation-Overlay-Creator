@@ -1,7 +1,6 @@
 import fitz  # PyMuPDF
 import csv
 import json
-import re
 from time import time
 import os
 
@@ -23,9 +22,6 @@ doc = fitz.open(pdf_file)
 
 # Create an empty list to store all annotation data in the final format
 all_annotations = []
-
-# Secondary CSV file to log matches for manual inspection
-match_log_csv = os.path.join(os.path.dirname(input_file), f"{pdf_filename_no_ext}_matches_log.csv")
 
 # Function to generate the escaped JSON string for annotation data
 def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
@@ -66,51 +62,28 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
     # Convert to a JSON string and escape it
     return json.dumps(annotation_data).replace('"', '\\"')
 
-# Prepare the match log CSV
-with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
-    log_writer = csv.writer(log_file)
-    log_writer.writerow(["Original Phrase", "Regex Pattern", "Matched Phrase", "Page Number"])
+# Read the target phrases and their links from the input file
+with open(input_file, newline='', encoding='utf-8') as file:
+    reader = csv.DictReader(file, delimiter=input_delimiter)
 
-    # Read the target phrases and their links from the input file
-    with open(input_file, newline='', encoding='utf-8') as file:
-        reader = csv.DictReader(file, delimiter=input_delimiter)
+    # For each row in the input file (each phrase-link pair)
+    for row in reader:
+        phrase = row['Phrase']
+        link = row['Link']
 
-        # For each row in the input file (each phrase-link pair)
-        for row in reader:
-            phrase = row['Phrase']
-            link = row['Link']
-
-            # Manually build a flexible regex pattern for the phrase
-            pattern_parts = [re.escape(part) for part in re.split(r'(\s|\[|\]|,)', phrase)]
-            phrase_pattern = r"[\s\[\],-]*".join(part for part in pattern_parts if part)
+        # Loop through each page in the PDF to find the phrase
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
             
-            # Print the regex pattern for troubleshooting
-            print(f"Searching with pattern: {phrase_pattern}")
-
-            # Loop through each page in the PDF to find the phrase
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-
-                # Extract page text
-                page_text = page.get_text("text")
-
-                # Print a snippet of page text for troubleshooting
-                print(f"Page {page_num} text snippet:\n{page_text[:500]}\n")
-
-                # Find all matches with flexible regex
-                matches = [(m.start(), m.end()) for m in re.finditer(phrase_pattern, page_text, re.IGNORECASE)]
-
-                # For each match found, generate annotation data and log the match
-                for start, end in matches:
-                    matched_text = page_text[start:end]
-                    quads = page.search_for(matched_text)
-                    if quads:
-                        rect = fitz.Rect(quads[0])  # bounding box as a rectangle object
-                        annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                        all_annotations.append(annotation_data)
-
-                        # Log the original phrase, regex pattern, matched text, and page number in the match log CSV
-                        log_writer.writerow([phrase, phrase_pattern, matched_text, page_num])
+            # Search for the phrase on the page
+            instances = page.search_for(phrase)
+            
+            if instances:
+                # For each instance of the phrase found, generate annotation data
+                for inst in instances:
+                    rect = fitz.Rect(inst)  # bounding box as a rectangle object
+                    annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                    all_annotations.append(annotation_data)
 
 # Combine all the annotations into the final JSON annotation group
 if all_annotations:
