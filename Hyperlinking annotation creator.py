@@ -8,10 +8,13 @@ import os
 user_email = "william@advancediscovery.io"
 
 # File paths
-input_csv = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
+input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
 pdf_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\LAY.WCH.001.0001.pdf"
 
-# Get the file name without extension for the "bates control #" column
+# Determine delimiter based on file extension
+input_delimiter = '\t' if input_file.endswith('.txt') else ','
+
+# Get the file name without extension for the "Bates/Control #" column
 pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_file))[0]
 
 # Open the PDF file
@@ -59,11 +62,11 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
     # Convert to a JSON string and escape it
     return json.dumps(annotation_data).replace('"', '\\"')
 
-# Read the target phrases and their links from the input CSV
-with open(input_csv, newline='') as csvfile:
-    reader = csv.DictReader(csvfile)
+# Read the target phrases and their links from the input file
+with open(input_file, newline='', encoding='utf-8') as file:
+    reader = csv.DictReader(file, delimiter=input_delimiter)
 
-    # For each row in the CSV (each phrase-link pair).  May need to update these to new names.  Check with Ben
+    # For each row in the input file (each phrase-link pair)
     for row in reader:
         phrase = row['Phrase']
         link = row['Link']
@@ -94,8 +97,8 @@ if all_annotations:
     }
 
     # Save the annotation data to the output CSV
-    output_csv = os.path.join(os.path.dirname(input_csv), f"{pdf_filename_no_ext}_annotation_output.csv")
-    with open(output_csv, mode='w', newline='') as csvfile:
+    output_csv = os.path.join(os.path.dirname(input_file), f"{pdf_filename_no_ext}_annotation_output.csv")
+    with open(output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['Bates/Control #', 'Annotation Data']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
