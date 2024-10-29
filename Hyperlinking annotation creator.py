@@ -6,11 +6,11 @@ from time import time
 import os
 
 # User email to show in notes
-user_email = "trials@advancediscovery.io"
+user_email = "william@advancediscovery.io"
 
 # File paths
-input_file = r"D:\Python Annotation Creator\lay.joh.045.txt"
-pdf_file = r"D:\Python Annotation Creator\LAY.JOH.045.0001_0001.pdf"
+input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
+pdf_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\LAY.WCH.001.0001.pdf"
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
@@ -69,7 +69,7 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
 # Prepare the match log CSV
 with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
     log_writer = csv.writer(log_file)
-    log_writer.writerow(["Original Phrase", "Matched Phrase", "Page Number"])
+    log_writer.writerow(["Original Phrase", "Regex Pattern", "Matched Phrase", "Page Number"])
 
     # Read the target phrases and their links from the input file
     with open(input_file, newline='', encoding='utf-8') as file:
@@ -81,9 +81,11 @@ with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
             link = row['Link']
 
             # Manually build a flexible regex pattern for the phrase
-            # Add [\s\[\],-]* between significant components to handle variations
             pattern_parts = [re.escape(part) for part in re.split(r'(\s|\[|\]|,)', phrase)]
             phrase_pattern = r"[\s\[\],-]*".join(part for part in pattern_parts if part)
+            
+            # Print the regex pattern for troubleshooting
+            print(f"Searching with pattern: {phrase_pattern}")
 
             # Loop through each page in the PDF to find the phrase
             for page_num in range(len(doc)):
@@ -91,6 +93,9 @@ with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
 
                 # Extract page text
                 page_text = page.get_text("text")
+
+                # Print a snippet of page text for troubleshooting
+                print(f"Page {page_num} text snippet:\n{page_text[:500]}\n")
 
                 # Find all matches with flexible regex
                 matches = [(m.start(), m.end()) for m in re.finditer(phrase_pattern, page_text, re.IGNORECASE)]
@@ -100,13 +105,12 @@ with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
                     matched_text = page_text[start:end]
                     quads = page.search_for(matched_text)
                     if quads:
-                        # Take the first match's bounding box (adjust as needed for other occurrences)
                         rect = fitz.Rect(quads[0])  # bounding box as a rectangle object
                         annotation_data = create_annotation_data(rect, page_num, phrase, link)
                         all_annotations.append(annotation_data)
 
-                        # Log the original phrase and matched text in the match log CSV
-                        log_writer.writerow([phrase, matched_text, page_num])
+                        # Log the original phrase, regex pattern, matched text, and page number in the match log CSV
+                        log_writer.writerow([phrase, phrase_pattern, matched_text, page_num])
 
 # Combine all the annotations into the final JSON annotation group
 if all_annotations:
