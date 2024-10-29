@@ -6,7 +6,7 @@ from time import time
 import os
 
 # User email to show in notes
-user_email = "trials@advancediscovery.io"
+user_email = "trial.solutions@advancediscovery.io"
 
 # File paths
 input_file = r"D:\Python Annotation Creator\lay.joh.045.csv"
