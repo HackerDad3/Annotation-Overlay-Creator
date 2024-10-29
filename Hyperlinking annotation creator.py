@@ -75,7 +75,7 @@ with open(input_file, newline='', encoding='utf-8') as file:
         matched = False  # Flag to track if the phrase is matched
 
         # Create a regex pattern allowing line breaks within phrases
-        phrase_pattern = re.sub(r'\s+', r'[\s\n]+', re.escape(phrase))
+        phrase_pattern = re.sub(r'\s+', '[\\s\\n]+', re.escape(phrase))
 
         # Loop through each page in the PDF to find the phrase
         for page_num in range(len(doc)):
