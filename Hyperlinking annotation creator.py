@@ -74,36 +74,58 @@ with open(input_file, newline='', encoding='utf-8') as file:
         link = row['Link']
         matched = False  # Flag to track if the phrase is matched
 
-        # Create a regex pattern allowing line breaks within phrases
-        phrase_pattern = re.sub(r'\s+', '[\\s\\n]+', re.escape(phrase))
-
-        # Loop through each page in the PDF to find the phrase
+        # 1. **Search for Exact Matches** (search for raw phrase)
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             
-            # Extract the full page text with line breaks preserved
-            page_text = page.get_text("text")
-
-            # Search for the phrase in the page text using regex
-            for match in re.finditer(phrase_pattern, page_text, re.IGNORECASE):
+            # Search for the exact phrase
+            instances = page.search_for(phrase)
+            
+            if instances:
                 matched = True
                 matched_phrases.append(phrase)
-                
-                # Highlight each line within the match to handle line breaks
-                start, end = match.span()
-                match_text = page_text[start:end]
-                quads = page.search_for(match_text)
-
-                # Generate annotation data for each quad found
-                for quad in quads:
-                    rect = fitz.Rect(quad)  # bounding box as a rectangle object
+                # Generate annotation data for each exact match
+                for inst in instances:
+                    rect = fitz.Rect(inst)
                     annotation_data = create_annotation_data(rect, page_num, phrase, link)
                     all_annotations.append(annotation_data)
-
                 break  # Stop searching after the first match is found
-        
+
+        # 2. **Search for Flexible Matches** (allow line breaks only at specific characters)
+        if not matched:  # Only if no exact match was found
+            # Create a regex pattern allowing line breaks at specific points (e.g., after hyphens or commas)
+            flexible_pattern = re.escape(phrase)
+            flexible_pattern = flexible_pattern.replace(r'\-', r'\-\s*').replace(r'\,', r'\,\s*')
+
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                
+                # Extract the full page text with line breaks preserved
+                page_text = page.get_text("text")
+
+                # Search for the phrase in the page text using regex
+                for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
+                    matched = True
+                    matched_phrases.append(phrase)
+                    
+                    # Highlight each line within the match to handle line breaks
+                    start, end = match.span()
+                    match_text = page_text[start:end]
+                    lines = match_text.splitlines()  # Split matched text by lines
+
+                    # Generate annotation data for each line separately
+                    for line in lines:
+                        quads = page.search_for(line)  # Search for each line
+                        for quad in quads:
+                            rect = fitz.Rect(quad)
+                            annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                            all_annotations.append(annotation_data)
+
+                    break  # Stop searching after the first match is found
+
+        # If no matches were found, log it as unmatched
         if not matched:
-            unmatched_phrases.append(phrase)  # Record the unmatched phrase
+            unmatched_phrases.append(phrase)
 
 # Combine all the annotations into the final JSON annotation group
 if all_annotations:
