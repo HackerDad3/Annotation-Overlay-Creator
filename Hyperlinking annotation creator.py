@@ -80,8 +80,10 @@ with open(match_log_csv, mode='w', newline='', encoding='utf-8') as log_file:
             phrase = row['Phrase']
             link = row['Link']
 
-            # Create a flexible regex pattern for the phrase
-            phrase_pattern = re.sub(r'[\s\[\],]', r'[\s\[\],-]*', re.escape(phrase))
+            # Manually build a flexible regex pattern for the phrase
+            # Add [\s\[\],-]* between significant components to handle variations
+            pattern_parts = [re.escape(part) for part in re.split(r'(\s|\[|\]|,)', phrase)]
+            phrase_pattern = r"[\s\[\],-]*".join(part for part in pattern_parts if part)
 
             # Loop through each page in the PDF to find the phrase
             for page_num in range(len(doc)):
