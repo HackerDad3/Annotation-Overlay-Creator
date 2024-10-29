@@ -6,11 +6,11 @@ from time import time
 import os
 
 # User email to show in notes
-user_email = "william@advancediscovery.io"
+user_email = "trials@advancediscovery.io"
 
 # File paths
-input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
-pdf_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\LAY.WCH.001.0001.pdf"
+input_file = r"D:\Python Annotation Creator\lay.joh.045.txt"
+pdf_file = r"D:\Python Annotation Creator\LAY.JOH.045.0001_0001.pdf"
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
