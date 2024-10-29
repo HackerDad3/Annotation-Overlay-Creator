@@ -2,7 +2,7 @@ import csv
 import os
 
 # File paths
-input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.txt"  # Tab-delimited input file
+input_file = r"C:\Users\Willi\Downloads\LAY.JOH.045.txt"
 output_file = os.path.splitext(input_file)[0] + '.csv'  # Output file with .csv extension
 
 # Read the tab-delimited file and write to CSV
