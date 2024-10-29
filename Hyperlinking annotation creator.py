@@ -1,6 +1,7 @@
 import fitz  # PyMuPDF
 import csv
 import json
+import re
 from time import time
 import os
 
@@ -20,7 +21,7 @@ pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_file))[0]
 # Open the PDF file
 doc = fitz.open(pdf_file)
 
-# Create an empty list to store all annotation data in the final format
+# Create lists to store all annotation data and track matched/unmatched phrases
 all_annotations = []
 matched_phrases = []
 unmatched_phrases = []
@@ -60,7 +61,6 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
         "unit": "point",
         "markedText": phrase
     }
-    
     # Convert to a JSON string and escape it
     return json.dumps(annotation_data).replace('"', '\\"')
 
@@ -74,21 +74,32 @@ with open(input_file, newline='', encoding='utf-8') as file:
         link = row['Link']
         matched = False  # Flag to track if the phrase is matched
 
+        # Create a regex pattern allowing line breaks within phrases
+        phrase_pattern = re.sub(r'\s+', r'[\s\n]+', re.escape(phrase))
+
         # Loop through each page in the PDF to find the phrase
         for page_num in range(len(doc)):
             page = doc.load_page(page_num)
             
-            # Search for the phrase on the page
-            instances = page.search_for(phrase)
-            
-            if instances:
-                matched = True  # Set matched flag to True
-                # For each instance of the phrase found, generate annotation data
-                for inst in instances:
-                    rect = fitz.Rect(inst)  # bounding box as a rectangle object
+            # Extract the full page text with line breaks preserved
+            page_text = page.get_text("text")
+
+            # Search for the phrase in the page text using regex
+            for match in re.finditer(phrase_pattern, page_text, re.IGNORECASE):
+                matched = True
+                matched_phrases.append(phrase)
+                
+                # Highlight each line within the match to handle line breaks
+                start, end = match.span()
+                match_text = page_text[start:end]
+                quads = page.search_for(match_text)
+
+                # Generate annotation data for each quad found
+                for quad in quads:
+                    rect = fitz.Rect(quad)  # bounding box as a rectangle object
                     annotation_data = create_annotation_data(rect, page_num, phrase, link)
                     all_annotations.append(annotation_data)
-                matched_phrases.append(phrase)  # Record the matched phrase
+
                 break  # Stop searching after the first match is found
         
         if not matched:
