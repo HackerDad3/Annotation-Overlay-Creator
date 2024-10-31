@@ -4,13 +4,14 @@ import json
 import re
 from time import time
 import os
+from tqdm import tqdm  # Progress bar
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
 
 # File paths
-input_file = r"D:\Python Annotation Creator\lay.joh.045.csv"
-pdf_file = r"D:\Python Annotation Creator\LAY.JOH.045.0001_0001.pdf"
+input_file = r"D:\Annotation Data Python\LAY.JOH.025\LAY.JOH.025FolderRef.txt"
+pdf_file = r"F:\Tranche 9\RemainingImages21_32\RemainingImages21_32\images\LAY.JOH.025.0001_0001.pdf"
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
@@ -66,11 +67,11 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
 
 # Read the target phrases and their links from the input file
 with open(input_file, newline='', encoding='utf-8') as file:
-    reader = csv.DictReader(file, delimiter=input_delimiter)
+    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm
 
-    # For each row in the input file (each phrase-link pair)
-    for row in reader:
-        phrase = row['Phrase']
+    # Initialize tqdm progress bar
+    for row in tqdm(reader, desc="Processing phrases"):
+        phrase = row['Reference']
         link = row['Link']
         matched = False  # Flag to track if the phrase is matched
 
