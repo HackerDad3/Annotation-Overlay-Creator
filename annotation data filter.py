@@ -13,7 +13,7 @@ output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
 # List to store the modified data
 modified_data = []
 
-# Define the user to filter out. Never William though.  He's the best. 
+# Define the user to filter out. Never William, Vicky, or Ben though.  We kick ass! 
 user_to_filter = 'trial.solutions@advancediscovery.io'
 
 # Open the CSV for reading
