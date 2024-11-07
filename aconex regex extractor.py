@@ -3,14 +3,14 @@ import csv
 import os
 
 def extract_words(input_file, output_file):
-    # Define the regex pattern for the required styles using re.VERBOSE for readability
+    # patterns I think I saw
     pattern = r'''
         \b                          # Word boundary
-        (?:                        # Non-capturing group for different patterns
+        (?:                        # Non capturing group for different patterns
             [A-Z]{3}-[A-Z]{3}-\d{4}-\d{7} |      # Matches NRT-CIV-1716-4577446
-            Civmec-[A-Z]{4}-\d{6} |               # Matches Civmec-XXXX-009918 (XXXX = 4 letters)
-            FE\d{3}-[A-Z]{3}-[A-Z]{3}-\d{3} (?:_\d+)? |    # Matches FE118-CLA-EOT-072 or FE118-CLA-EOT-072_3
-            Civmec-[A-Z]{4}\d{6}                   # Matches Civmec-XXXX008340 (XXXX = 4 letters)
+            Civmec-[A-Z]{4}-\d{6} |               # Matches Civmec-XXXX-009918
+            FE\d{3}-[A-Z]{3}-[A-Z]{3}-\d{3} (?:_\d+)? |    # Matches FE118-CLA-EOT-072
+            Civmec-[A-Z]{4}\d{6}                   # Matches Civmec-XXXX008340
         )
         \b                          # Word boundary
     '''
@@ -22,7 +22,7 @@ def extract_words(input_file, output_file):
     with open(input_file, 'r', encoding='utf-8') as file:
         for line in file:
             # Find all matches in the line
-            matches = re.findall(pattern, line, re.VERBOSE)  # Use re.VERBOSE flag
+            matches = re.findall(pattern, line, re.VERBOSE)  # Used verbose so it was easier to read and add more regex
             extracted_words.extend(matches)
 
     # Deduplicate the extracted words by converting the list to a set
@@ -35,7 +35,7 @@ def extract_words(input_file, output_file):
         for word in sorted(deduplicated_words):  # Optional: Sort for consistency
             csv_writer.writerow([word])
 
-# Example usage
+# Let er rip
 input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\layjoh005 text.txt"
 output_file = os.path.join(os.path.dirname(input_file), f'{os.path.splitext(os.path.basename(input_file))[0]}_ExtractedText.csv')
 extract_words(input_file, output_file)
