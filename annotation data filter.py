@@ -13,7 +13,7 @@ output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
 # List to store the modified data
 modified_data = []
 
-# Prompt the user to select filter criteria.  This is first draft of prompts
+# Prompt the user to select filter criteria
 print("Choose your filter criteria:")
 print("1: Filter by user email")
 print("2: Filter by page range")
@@ -22,22 +22,28 @@ choice = input("Enter your choice (1, 2, or 3): ")
 
 # Variables for filter options
 filter_user = filter_page_range = False
-include_user = include_page_range = True  # Make it default.  It worked this way
+include_user = include_page_range = True  # Default is inclusion
 
 # Configure user email filter
 if choice in ('1', '3'):
     filter_user = True
     user_to_filter = input("Enter the user email to filter: ")
-    user_filter_choice = input("Do you want to include or exclude this user? (Enter 'include' or 'exclude'): ").strip().lower()
-    include_user = user_filter_choice == 'include'
+    print("Do you want to include or exclude this user?")
+    print("1: Include")
+    print("2: Exclude")
+    user_filter_choice = input("Enter your choice (1 or 2): ").strip()
+    include_user = user_filter_choice == '1'
 
 # Configure page range filter
 if choice in ('2', '3'):
     filter_page_range = True
     start_page = int(input("Enter the start page number: ")) - 1  # Adjust for 0-based index
     end_page = int(input("Enter the end page number: ")) - 1      # Adjust for 0-based index
-    page_filter_choice = input("Do you want to include or exclude this page range? (Enter 'include' or 'exclude'): ").strip().lower()
-    include_page_range = page_filter_choice == 'include'
+    print("Do you want to include or exclude this page range?")
+    print("1: Include")
+    print("2: Exclude")
+    page_filter_choice = input("Enter your choice (1 or 2): ").strip()
+    include_page_range = page_filter_choice == '1'
 
 # Open the CSV for reading
 with open(input_file, newline='', encoding='utf-8') as csvfile:
