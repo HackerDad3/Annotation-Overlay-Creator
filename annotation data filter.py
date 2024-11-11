@@ -2,29 +2,29 @@ import csv
 import os
 import json
 
-# Input file
+# Input file. This can probably be an input??
 input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
 
-# Output file creation so I don't have to paste all the time
+# Just make the output file path so I don't have to copy-paste each time
 base_name = os.path.splitext(os.path.basename(input_file))[0]  
 output_filename = f"{base_name}_FilteredAnnotations.csv"
 output_filepath = os.path.join(os.path.dirname(input_file), output_filename)  
 
-# List to store the modified data
+# List to hold the modified data
 modified_data = []
 
-# Prompt the user to select filter criteria
+# Ask user how they wanna filter stuff
 print("Choose your filter criteria:")
 print("1: Filter by user email")
 print("2: Filter by page range")
 print("3: Filter by both")
 choice = input("Enter your choice (1, 2, or 3): ")
 
-# Variables for filter options
+# Flags for what we're filtering and default to include
 filter_user = filter_page_range = False
-include_user = include_page_range = True  # Default is inclusion
+include_user = include_page_range = True
 
-# Configure user email filter
+# If filtering by user, get the email and choice to include/exclude
 if choice in ('1', '3'):
     filter_user = True
     user_to_filter = input("Enter the user email to filter: ")
@@ -34,84 +34,82 @@ if choice in ('1', '3'):
     user_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_user = user_filter_choice == '1'
 
-# Configure page range filter
+# If filtering by page range, get the range and choice to include/exclude
 if choice in ('2', '3'):
     filter_page_range = True
-    start_page = int(input("Enter the start page number: ")) - 1  # Adjust for 0-based index
-    end_page = int(input("Enter the end page number: ")) - 1      # Adjust for 0-based index
+    start_page = int(input("Enter the start page number: ")) - 1  # 1-based to 0-based
+    end_page = int(input("Enter the end page number: ")) - 1      # Adjust as above
     print("Do you want to include or exclude this page range?")
     print("1: Include")
     print("2: Exclude")
     page_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_page_range = page_filter_choice == '1'
 
-# Open the CSV for reading
+# Open up the CSV and start reading
 with open(input_file, newline='', encoding='utf-8') as csvfile:
     reader = csv.DictReader(csvfile)
 
-    # Iterate over each row in the CSV
+    # Go through each row in the file
     for row in reader:
         if 'Annotation Data' in row and row['Annotation Data']:
             try:
-                # Parse the original JSON data in the 'Annotation Data' field
+                # Parse the JSON that's in the 'Annotation Data' field
                 annotation_data = json.loads(row['Annotation Data'])
                 
-                # Check if 'Highlights' is present
+                # If 'Highlights' are there, we’re good get shit done
                 if 'Highlights' in annotation_data:
-                    highlights = annotation_data['Highlights'].split('\u0013')  # Split using the separator
+                    highlights = annotation_data['Highlights'].split('\u0013')  # Split them up
                     
-                    # Filter highlights based on selected criteria
+                    # Go through highlights and filter as needed
                     filtered_highlights = []
                     for highlight in highlights:
-                        highlight_json = json.loads(highlight)  # Parse each highlight as JSON
+                        highlight_json = json.loads(highlight)  # Get each highlight as JSON
                         
-                        # Initialize inclusion for this highlight
+                        # Start by assuming we'll keep it
                         include_highlight = True
                         
-                        # Apply user email filter
+                        # Check if we need to filter by user email
                         if filter_user:
                             user_matches = highlight_json.get('user') == user_to_filter
                             if include_user:
-                                include_highlight &= user_matches  # Include only if user matches
+                                include_highlight &= user_matches  # Only if user matches
                             else:
                                 include_highlight &= not user_matches  # Exclude if user matches
                         
-                        # Apply page range filter
+                        # Check if we need to filter by page range
                         if filter_page_range:
                             page_num = highlight_json.get('rectangles', {}).get('pageNum')
                             page_in_range = page_num is not None and (start_page <= page_num <= end_page)
                             if include_page_range:
-                                include_highlight &= page_in_range  # Include only if in range
+                                include_highlight &= page_in_range  # Only if in range
                             else:
                                 include_highlight &= not page_in_range  # Exclude if in range
                         
-                        # Add highlight if it meets criteria
+                        # Add highlight if it’s still good after all that
                         if include_highlight:
                             filtered_highlights.append(highlight_json)
 
-                    # Rebuild the Highlights string with only the filtered highlights
+                    # Rebuild Highlights with only the filtered ones
                     annotation_data['Highlights'] = '\u0013'.join(
                         json.dumps(h, ensure_ascii=False) for h in filtered_highlights
                     )
 
-                # Store the modified annotation data back into the row
+                # Put the modified JSON back in the row
                 row['Annotation Data'] = json.dumps(annotation_data, ensure_ascii=False)
             except json.JSONDecodeError as e:
-                print(f"Error decoding JSON in row: {row['Bates/Control #']} - {e}")
+                print(f"JSON error in row: {row['Bates/Control #']} - {e}")
 
-        # Append the modified row to the list
+        # Add the row to our modified data list
         modified_data.append(row)
 
-# Save the modified data to a new CSV file
+# Write out the new CSV with the filtered data
 with open(output_filepath, mode='w', newline='', encoding='utf-8') as csvfile:
-    fieldnames = reader.fieldnames  # Use the original fieldnames from the input file
+    fieldnames = reader.fieldnames  # Keep original fieldnames
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-    # Write the header
+    # Write the header and the filtered data
     writer.writeheader()
-
-    # Write the modified data rows
     for row in modified_data:
         writer.writerow(row)
 
-print(f"Processed annotations saved to: {output_filepath}")
+print(f"Done! Processed annotations saved to: {output_filepath}")
