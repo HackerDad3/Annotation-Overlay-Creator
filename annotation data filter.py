@@ -37,8 +37,8 @@ if choice in ('1', '3'):
 # If filtering by page range, get the range and choice to include/exclude
 if choice in ('2', '3'):
     filter_page_range = True
-    start_page = int(input("Enter the start page number: ")) - 1  # 1-based to 0-based
-    end_page = int(input("Enter the end page number: ")) - 1      # Adjust as above
+    start_page = int(input("Enter the start page number: ")) - 1  # Make page numbering like Everlaw
+    end_page = int(input("Enter the end page number: ")) - 1      
     print("Do you want to include or exclude this page range?")
     print("1: Include")
     print("2: Exclude")
