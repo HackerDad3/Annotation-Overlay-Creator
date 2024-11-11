@@ -8,19 +8,21 @@ def extract_words(input_file, output_file):
         \b                          # Word boundary
         (?:                        # Non capturing group for different patterns
             [A-Z]{3}-[A-Z]{3}-\d{4}-\d{7} |      # Matches NRT-CIV-1716-4577446
-            Civmec-[A-Z]{4}-\d{6} |               # Matches Civmec-XXXX-009918
+            Civmec-(?:[A-Z]{4,5}-\d{6}|[A-Z]{4}\d{6}) |               # Matches Civmec-XXXX-009918
             FE\d{3}-[A-Z]{3}-[A-Z]{3}-\d{3} (?:_\d+)? |    # Matches FE118-CLA-EOT-072
-            Civmec-[A-Z]{4}\d{6} |                  # Matches Civmec-XXXX008340
-            IJVWTRAN-[A-Z]{4}\d{6} |        # Additions from Ben
-            Civmec-TRANSMIT[A-Z]{4}\d{6} |  # Additions from Ben
-            IJV-RTRFI-[A-Z]{4}\d{6} |   # Additions from Ben
-            Civmec-RFI-[A-Z]{4}\d{6} |  # Additions from Ben
-            IJVGCOR-[A-Z]{4}\d{6} | # Additions from Ben
-            CivmecGCOR-[A-Z]{4}\d{6} | # Additions from Ben
-            CivmecGCOR[A-Z]{4}\d{6} | # Additions from Ben
-            Civmec-RFI[A-Z]{4}\d{6} | # Additions from Ben
-            IJV-RTRFI[A-Z]{4}\d{6} | # Additions from Ben
-            DJV-ACTION[A-Z]{4}\d{6} # Additions from Ben
+            #Civmec-[A-Z]{4}\d{6} |                  # Matches Civmec-XXXX008340.  ADDED TO PREVIOUS ONE WITH NON GROUPING
+            NRT\s(?:IJV[A-Z]{3,6}|IJV-[A-Z]{3,6}|IJV[A-Z]{3,6}-|IJV-[A-Z]{3,6}-)(?:\d{6}|[A-Z]{4}\d{6}) |  # SHOULD BE UNIVERSAL FOR NRT IJV DOCS
+            NRT (?:IJVWTRAN|IJV-WTRAN)-(?:\d{6}|[A-Z]{4}\d{6}) |        # Additions from Ben. updated to allow for missing 4 letters
+            Civmec-TRANSMIT(?:\d{6}|[A-Z]{4}\d{6}) |  # Additions from Ben. updated
+            NRT (?:IJVRTRFI|IJV-RTRFI)-(?:\d{6}|[A-Z]{4}\d{6}) |   # Additions from Ben. updated
+            Civmec-RFI-(?:\d{6}|[A-Z]{4}\d{6}) |  # Additions from Ben
+            NRT IJVGCOR-(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            CivmecGCOR-(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            CivmecGCOR(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            Civmec-RFI(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            IJV-RTRFI(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            DJV-ACTION(?:\d{6}|[A-Z]{4}\d{6}) | # Additions from Ben
+            NWRLOTS-[A-Z]{2,3}-[A-Z]{2,3}-[A-Z]{2,3}-(?:[A-Z]{2,3}-|[A-Z]{2,3})\d{6}
         )
         \b                          # Word boundary
     '''
@@ -46,6 +48,6 @@ def extract_words(input_file, output_file):
             csv_writer.writerow([word])
 
 # Let er rip
-input_file = r"C:\Users\Willi\Downloads\Annotation Test\annotation_test_results first run.txt"
+input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\LayJoh005 Text.txt"
 output_file = os.path.join(os.path.dirname(input_file), f'{os.path.splitext(os.path.basename(input_file))[0]}_ExtractedText.csv')
 extract_words(input_file, output_file)
