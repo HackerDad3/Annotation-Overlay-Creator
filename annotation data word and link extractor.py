@@ -1,66 +1,48 @@
-# v0.1.0
-
-import csv
+import pandas as pd
 import os
-import json
 
-# Input file
-input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
+# Input file path
+input_file = r"C:\Users\Willi\Downloads\20241112T1208_UTC8_Lay_Notes_Full.csv"
 
-# Create output file path
+# Create output file path automatically
 base_name = os.path.splitext(os.path.basename(input_file))[0]
-output_filename = f"{base_name}_AnnotationsExtracted.csv"
-output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
+output_filename = f"{base_name}_ExtractedNotes.csv"
+output_file = os.path.join(os.path.dirname(input_file), output_filename)
 
-# Function to extract highlights and notes
-def extract_annotations(row):
-    annotations = []
-    try:
-        annotation_data = json.loads(row['Annotation Data'])
-        if 'Highlights' in annotation_data:
-            highlights = annotation_data['Highlights'].split('\u0013')
+def process_notes(note_text):
+    """Split the notes using double line breaks."""
+    if pd.isna(note_text):
+        return []
+    notes = [note.strip() for note in note_text.split('\n\n') if note.strip()]
+    return notes
 
-            for highlight in highlights:
-                highlight_json = json.loads(highlight)
-                bates_number = row['Bates/Control #']
-                
-                # Extract highlighted text
-                highlighted_text = highlight_json.get('markedText', '')
+# Read the input CSV using Pandas
+df = pd.read_csv(input_file, encoding='utf-8-sig')
 
-                # Extract notes (if available)
-                notes = ''
-                if 'notes' in highlight_json:
-                    notes_list = highlight_json['notes']
-                    if notes_list:
-                        notes = notes_list[0].get('text', '')
+# Check if the required columns exist
+if 'Bates/Control #' not in df.columns or 'Note Text' not in df.columns:
+    raise ValueError("Input file is missing required columns: 'Bates/Control #' or 'Note Text'")
 
-                # Append the extracted data as a row
-                annotations.append({
-                    'Bates/Control #': bates_number,
-                    'Highlighted Text': highlighted_text,
-                    'Notes Text': notes
-                })
-    except json.JSONDecodeError as e:
-        print(f"JSON error in row: {row['Bates/Control #']} - {e}")
-    return annotations
+# Create an empty DataFrame to store the processed notes
+output_data = []
 
-# List to store extracted annotation data
-extracted_data = []
+# Process each row to split the notes
+for _, row in df.iterrows():
+    bates_number = row['Bates/Control #']
+    note_text = row['Note Text']
+    
+    # Split the notes and add each note as a separate row in the output
+    notes = process_notes(note_text)
+    for note in notes:
+        output_data.append({
+            'Bates/Control #': bates_number,
+            'Note Text': note
+        })
 
-# Read input CSV and extract annotations
-with open(input_file, newline='', encoding='utf-8') as csvfile:
-    reader = csv.DictReader(csvfile)
+# Convert the processed data into a DataFrame
+output_df = pd.DataFrame(output_data)
 
-    for row in reader:
-        if 'Annotation Data' in row and row['Annotation Data']:
-            extracted_data.extend(extract_annotations(row))
+# Write the output DataFrame to a CSV file
+output_df.to_csv(output_file, index=False, encoding='utf-8')
 
-# Write extracted data to a new CSV file
-with open(output_filepath, mode='w', newline='', encoding='utf-8') as csvfile:
-    fieldnames = ['Bates/Control #', 'Highlighted Text', 'Notes Text']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-    writer.writeheader()
-    writer.writerows(extracted_data)
-
-print(f"Done! Extracted annotations saved to: {output_filepath}")
+print(f"Done! Extracted notes saved to: {output_file}. So long and thanks for all the fish!!")
