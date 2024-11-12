@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import re
 
 # Input file path
 input_file = r"C:\Users\Willi\Downloads\20241112T1208_UTC8_Lay_Notes_Full.csv"
@@ -16,6 +17,15 @@ def process_notes(note_text):
     notes = [note.strip() for note in note_text.split('\n\n') if note.strip()]
     return notes
 
+def extract_document_info(note):
+    """Extract Document ID and Filename from the Note Text."""
+    match = re.match(r"^(\S+)\s+\((.+)\)$", note)
+    if match:
+        document_id = match.group(1)
+        filename = match.group(2)
+        return document_id, filename
+    return None, None
+
 # Read the input CSV using Pandas
 df = pd.read_csv(input_file, encoding='utf-8-sig')
 
@@ -26,17 +36,20 @@ if 'Bates/Control #' not in df.columns or 'Note Text' not in df.columns:
 # Create an empty DataFrame to store the processed notes
 output_data = []
 
-# Process each row to split the notes
+# Process each row to split the notes and extract Document ID and Filename
 for _, row in df.iterrows():
     bates_number = row['Bates/Control #']
     note_text = row['Note Text']
     
-    # Split the notes and add each note as a separate row in the output
+    # Split the notes
     notes = process_notes(note_text)
     for note in notes:
+        document_id, filename = extract_document_info(note)
         output_data.append({
             'Bates/Control #': bates_number,
-            'Note Text': note
+            'Note Text': note,
+            'Document ID': document_id,
+            'Filename': filename
         })
 
 # Convert the processed data into a DataFrame
