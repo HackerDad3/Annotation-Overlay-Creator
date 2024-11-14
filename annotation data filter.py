@@ -4,7 +4,7 @@ import pandas as pd
 import time
 
 # Input file path
-input_file = r"C:\Users\Willi\Downloads\20241114T1138_UTC8_LAY.JOH.008.0001_current_annotation_data.csv"
+input_file = r"C:\Users\Willi\Downloads\20241114T1958_UTC8_Lay_Reports_Notes_Backup - Copy.csv"
 
 # Create the output file path
 base_name = os.path.splitext(os.path.basename(input_file))[0]
