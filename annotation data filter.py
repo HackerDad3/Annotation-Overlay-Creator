@@ -1,10 +1,9 @@
-# v0.5.0
 import os
 import json
 import pandas as pd
 
 # Input file path
-input_file = r"C:\Users\Willi\Downloads\20241114T0946_UTC8_LAYJOH002_Annotation_data_current.csv"
+input_file = r"C:\Users\Willi\Downloads\20241114T1138_UTC8_LAY.JOH.008.0001_current_annotation_data.csv"
 
 # Create the output file path
 base_name = os.path.splitext(os.path.basename(input_file))[0]
@@ -16,10 +15,11 @@ print("Choose your filter criteria:")
 print("1: Filter by user email")
 print("2: Filter by page range")
 print("3: Filter by both")
-choice = input("Enter your choice (1, 2, or 3): ")
+print("4: No filtering")
+choice = input("Enter your choice (1, 2, 3, or 4): ")
 
 # Flags for filtering
-filter_user = filter_page_range = False
+filter_user = filter_page_range = deduplicate_notes = False
 include_user = include_page_range = True
 
 # If filtering by user, get the email and choice to include/exclude
@@ -35,7 +35,7 @@ if choice in ('1', '3'):
 # If filtering by page range, get the range and choice to include/exclude
 if choice in ('2', '3'):
     filter_page_range = True
-    start_page = int(input("Enter the start page number: ")) - 1  # Everlaw pages are zero-indexed
+    start_page = int(input("Enter the start page number: ")) - 1
     end_page = int(input("Enter the end page number: ")) - 1
     print("Do you want to include or exclude this page range?")
     print("1: Include")
@@ -43,12 +43,23 @@ if choice in ('2', '3'):
     page_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_page_range = page_filter_choice == '1'
 
+# Ask if the user wants to deduplicate text within the notes
+print("Do you want to deduplicate text within the notes? (y/n)")
+deduplicate_notes = input("Enter your choice: ").lower() == 'y'
+
 # Read the CSV file using Pandas
 df = pd.read_csv(input_file, encoding='utf-8')
 
 # Check if the required column exists
 if 'Annotation Data' not in df.columns:
     raise ValueError("The input CSV file does not contain the required 'Annotation Data' column.")
+
+# Function to deduplicate text within notes
+def deduplicate_note_text(note_text):
+    # Split the text by <br> and remove duplicates
+    lines = note_text.split('<br>')
+    unique_lines = list(dict.fromkeys(line.strip() for line in lines if line.strip()))
+    return '<br>'.join(unique_lines)
 
 # List to store the modified data
 modified_data = []
@@ -74,18 +85,24 @@ for index, row in df.iterrows():
                     if filter_user:
                         user_matches = highlight_json.get('user') == user_to_filter
                         if include_user:
-                            include_highlight &= user_matches  # Include if matches
+                            include_highlight &= user_matches
                         else:
-                            include_highlight &= not user_matches  # Exclude if matches
+                            include_highlight &= not user_matches
 
                     # Filter by page range
                     if filter_page_range:
                         page_num = highlight_json.get('rectangles', {}).get('pageNum')
                         page_in_range = page_num is not None and (start_page <= page_num <= end_page)
                         if include_page_range:
-                            include_highlight &= page_in_range  # Include if in range
+                            include_highlight &= page_in_range
                         else:
-                            include_highlight &= not page_in_range  # Exclude if in range
+                            include_highlight &= not page_in_range
+
+                    # Deduplicate text within the notes if the option is enabled
+                    if deduplicate_notes and 'notes' in highlight_json:
+                        for note in highlight_json['notes']:
+                            if 'text' in note:
+                                note['text'] = deduplicate_note_text(note['text'])
 
                     # Add the highlight if it passes all filters
                     if include_highlight:
