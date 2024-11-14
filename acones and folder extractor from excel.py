@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 # Define input Excel file path
-input_file = r"C:\Users\Willi\Downloads\LAY.JOH.002 refrences.xlsx"
+input_file = r"C:\Users\Willi\Downloads\LAY.JOH.008 - TEST FILE.xlsx"
 
 # Read the Excel file into a DataFrame and strip whitespace from column names
 df = pd.read_excel(input_file)
