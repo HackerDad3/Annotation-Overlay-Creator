@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+import time
 
 # Input file path
 input_file = r"C:\Users\Willi\Downloads\20241114T1138_UTC8_LAY.JOH.008.0001_current_annotation_data.csv"
@@ -10,7 +11,7 @@ base_name = os.path.splitext(os.path.basename(input_file))[0]
 output_filename = f"{base_name}_FilteredAnnotations.csv"
 output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
 
-# Ask user how they want to filter the data
+# Step 1: Ask how to filter the data
 print("Choose your filter criteria:")
 print("1: Filter by user email")
 print("2: Filter by page range")
@@ -18,8 +19,8 @@ print("3: Filter by both")
 print("4: No filtering")
 choice = input("Enter your choice (1, 2, 3, or 4): ")
 
-# Flags for filtering
-filter_user = filter_page_range = deduplicate_notes = False
+# Initialize flags
+filter_user = filter_page_range = deduplicate_notes = update_timestamp = False
 include_user = include_page_range = True
 
 # If filtering by user, get the email and choice to include/exclude
@@ -43,9 +44,13 @@ if choice in ('2', '3'):
     page_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_page_range = page_filter_choice == '1'
 
-# Ask if the user wants to deduplicate text within the notes
+# Step 2: Ask if the user wants to deduplicate text within the notes
 print("Do you want to deduplicate text within the notes? (y/n)")
 deduplicate_notes = input("Enter your choice: ").lower() == 'y'
+
+# Step 3: Ask if the user wants to update the timestamps
+print("Do you want to update the 'created' and 'updated' fields to the current datetime? (y/n)")
+update_timestamp = input("Enter your choice: ").lower() == 'y'
 
 # Read the CSV file using Pandas
 df = pd.read_csv(input_file, encoding='utf-8')
@@ -57,30 +62,32 @@ if 'Annotation Data' not in df.columns:
 # Function to deduplicate text within notes
 def deduplicate_note_text(note_text):
     """ Deduplicate lines within the text, separated by <br>. """
-    # Step 1: Normalize consecutive <br> tags
     note_text = note_text.replace('<br><br>', '<br>').strip()
-    
-    # Step 2: Check for leading <p> and trailing </p> tags
     has_p_tags = note_text.startswith('<p>') and note_text.endswith('</p>')
     if has_p_tags:
-        # Remove the <p> and </p> tags for easier deduplication
         note_text = note_text[3:-4].strip()
-    
-    # Step 3: Split the text by <br>
     lines = note_text.split('<br>')
-    
-    # Step 4: Remove duplicates while preserving order, and strip spaces
     unique_lines = list(dict.fromkeys(line.strip() for line in lines if line.strip()))
-    
-    # Step 5: Join the unique lines back with <br>
     deduplicated_text = '<br>'.join(unique_lines)
-    
-    # Step 6: Re-add <p> and </p> tags if they were originally present
-    if has_p_tags:
-        deduplicated_text = f"<p>{deduplicated_text}</p>"
-    
-    # Ensure there is a single trailing <br>
-    return deduplicated_text + '<br>'
+    return f"<p>{deduplicated_text}</p>" if has_p_tags else deduplicated_text + '<br>'
+
+# Function to update timestamps
+def update_datetime_to_current(data):
+    """ Update 'created' and 'updated' timestamps to current datetime in milliseconds. """
+    current_timestamp = int(time.time() * 1000)
+
+    # Update top-level 'created' and 'updated' fields
+    if 'created' in data:
+        data['created'] = current_timestamp
+    if 'updated' in data:
+        data['updated'] = current_timestamp
+
+    # Update nested 'created' in notes if present
+    if 'notes' in data:
+        for note in data['notes']:
+            if 'created' in note:
+                note['created'] = current_timestamp
+    return data
 
 # List to store the modified data
 modified_data = []
@@ -89,7 +96,6 @@ modified_data = []
 for index, row in df.iterrows():
     if pd.notna(row['Annotation Data']):
         try:
-            # Parse the JSON in the 'Annotation Data' field
             annotation_data = json.loads(row['Annotation Data'])
 
             # If 'Highlights' are present, filter them
@@ -97,7 +103,6 @@ for index, row in df.iterrows():
                 highlights = annotation_data['Highlights'].split('\u0013')
                 filtered_highlights = []
 
-                # Go through each highlight
                 for highlight in highlights:
                     highlight_json = json.loads(highlight)
                     include_highlight = True
@@ -119,23 +124,27 @@ for index, row in df.iterrows():
                         else:
                             include_highlight &= not page_in_range
 
-                    # Deduplicate text within the notes if the option is enabled
+                    # Deduplicate text within the notes
                     if deduplicate_notes and 'notes' in highlight_json:
                         for note in highlight_json['notes']:
                             if 'text' in note and note['text']:
-                                # Deduplicate the text content within the note
                                 note['text'] = deduplicate_note_text(note['text'])
 
-                    # Add the highlight if it passes all filters
+                    # Update timestamps if the option is enabled
+                    if update_timestamp:
+                        highlight_json = update_datetime_to_current(highlight_json)
+
                     if include_highlight:
                         filtered_highlights.append(highlight_json)
 
-                # Rebuild the Highlights string with the filtered highlights
                 annotation_data['Highlights'] = '\u0013'.join(
                     json.dumps(h, ensure_ascii=False) for h in filtered_highlights
                 )
 
             # Update the row with the modified annotation data
+            if update_timestamp:
+                annotation_data = update_datetime_to_current(annotation_data)
+
             df.at[index, 'Annotation Data'] = json.dumps(annotation_data, ensure_ascii=False)
         except json.JSONDecodeError as e:
             print(f"JSON error in row {row.get('Bates/Control #', 'Unknown')} - {e}")
