@@ -10,8 +10,8 @@ from tqdm import tqdm  # Progress bar
 user_email = "trial.solutions@advancediscovery.io"
 
 # File paths
-input_file = r"D:\Annotation Data Python\LAY.JOH.025\LAY.JOH.025FolderRef.txt"
-pdf_file = r"F:\Tranche 9\RemainingImages21_32\RemainingImages21_32\images\LAY.JOH.025.0001_0001.pdf"
+input_file = r"C:\Users\Willi\Downloads\20241114T0304_UTC_LAY.JOH.002 refrences_LAY.JOH.002.csv"
+pdf_file = r"C:\Users\Willi\Downloads\OneDrive_1_14-11-2024\LAY.JOH.002.0001_0001.pdf"
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','

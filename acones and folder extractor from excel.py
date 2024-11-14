@@ -18,17 +18,24 @@ if not all(col in df.columns for col in required_columns):
 # Extract the 'Report' value for suffixing the output file
 report_value = df['Report'].iloc[0] if not df['Report'].empty else "UnknownReport"
 
-# Step 1: Group by 'Folder Reference' and concatenate 'Link' values
-folder_group = df.groupby('Folder Reference', as_index=False).agg({'Link': lambda x: ''.join(x)})
+# Step 1: Deduplicate rows based on Folder Reference, Aconex Reference, and Link
+df = df.drop_duplicates(subset=['Folder Reference', 'Aconex Reference', 'Link'])
+
+# Step 2: Group by 'Folder Reference' and concatenate unique 'Link' values
+folder_group = df.groupby('Folder Reference', as_index=False).agg({
+    'Link': lambda x: ''.join(pd.unique(x))
+})
 folder_group['Reference'] = folder_group['Folder Reference']
 folder_group = folder_group[['Reference', 'Link']]
 
-# Step 2: Group by 'Aconex Reference' and concatenate 'Link' values
-aconex_group = df.groupby('Aconex Reference', as_index=False).agg({'Link': lambda x: ''.join(x)})
+# Step 3: Group by 'Aconex Reference' and concatenate unique 'Link' values
+aconex_group = df.groupby('Aconex Reference', as_index=False).agg({
+    'Link': lambda x: ''.join(pd.unique(x))
+})
 aconex_group['Reference'] = aconex_group['Aconex Reference']
 aconex_group = aconex_group[['Reference', 'Link']]
 
-# Step 3: Combine both groups into a single DataFrame
+# Step 4: Combine both groups into a single DataFrame
 combined_df = pd.concat([folder_group, aconex_group], ignore_index=True)
 
 # Generate the output file name
@@ -40,4 +47,4 @@ output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
 # Save the DataFrame to CSV
 combined_df.to_csv(output_filepath, index=False, encoding='utf-8')
 
-print(f"Done! Grouped data saved to: {output_filepath}")
+print(f"Done! Grouped and deduplicated data saved to: {output_filepath}")
