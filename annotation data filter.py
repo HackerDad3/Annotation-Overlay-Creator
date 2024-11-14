@@ -56,10 +56,31 @@ if 'Annotation Data' not in df.columns:
 
 # Function to deduplicate text within notes
 def deduplicate_note_text(note_text):
-    # Split the text by <br> and remove duplicates
+    """ Deduplicate lines within the text, separated by <br>. """
+    # Step 1: Normalize consecutive <br> tags
+    note_text = note_text.replace('<br><br>', '<br>').strip()
+    
+    # Step 2: Check for leading <p> and trailing </p> tags
+    has_p_tags = note_text.startswith('<p>') and note_text.endswith('</p>')
+    if has_p_tags:
+        # Remove the <p> and </p> tags for easier deduplication
+        note_text = note_text[3:-4].strip()
+    
+    # Step 3: Split the text by <br>
     lines = note_text.split('<br>')
+    
+    # Step 4: Remove duplicates while preserving order, and strip spaces
     unique_lines = list(dict.fromkeys(line.strip() for line in lines if line.strip()))
-    return '<br>'.join(unique_lines)
+    
+    # Step 5: Join the unique lines back with <br>
+    deduplicated_text = '<br>'.join(unique_lines)
+    
+    # Step 6: Re-add <p> and </p> tags if they were originally present
+    if has_p_tags:
+        deduplicated_text = f"<p>{deduplicated_text}</p>"
+    
+    # Ensure there is a single trailing <br>
+    return deduplicated_text + '<br>'
 
 # List to store the modified data
 modified_data = []
@@ -101,7 +122,8 @@ for index, row in df.iterrows():
                     # Deduplicate text within the notes if the option is enabled
                     if deduplicate_notes and 'notes' in highlight_json:
                         for note in highlight_json['notes']:
-                            if 'text' in note:
+                            if 'text' in note and note['text']:
+                                # Deduplicate the text content within the note
                                 note['text'] = deduplicate_note_text(note['text'])
 
                     # Add the highlight if it passes all filters
@@ -116,7 +138,7 @@ for index, row in df.iterrows():
             # Update the row with the modified annotation data
             df.at[index, 'Annotation Data'] = json.dumps(annotation_data, ensure_ascii=False)
         except json.JSONDecodeError as e:
-            print(f"JSON error in row {row['Bates/Control #']} - {e}")
+            print(f"JSON error in row {row.get('Bates/Control #', 'Unknown')} - {e}")
 
 # Save the filtered data to a new CSV file
 df.to_csv(output_filepath, index=False, encoding='utf-8')
