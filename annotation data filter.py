@@ -4,7 +4,7 @@ import pandas as pd
 import time
 
 # Input file path
-input_file = r"C:\Users\Willi\Downloads\20241114T1958_UTC8_Lay_Reports_Notes_Backup - Copy.csv"
+input_file = r"C:\Users\Willi\Downloads\20241115T1029_UTC8_NRTIJV_Reports_Backup - Copy.csv"
 
 # Create the output file path
 base_name = os.path.splitext(os.path.basename(input_file))[0]
@@ -23,17 +23,17 @@ choice = input("Enter your choice (1, 2, 3, or 4): ")
 filter_user = filter_page_range = deduplicate_notes = update_timestamp = False
 include_user = include_page_range = True
 
-# If filtering by user, get the email and choice to include/exclude
+# Step 2: If filtering by user, get the email and choice to include/exclude
 if choice in ('1', '3'):
     filter_user = True
-    user_to_filter = input("Enter the user email to filter: ")
+    user_to_filter = input("Enter the user email to filter: ").strip()
     print("Do you want to include or exclude this user?")
     print("1: Include")
     print("2: Exclude")
     user_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_user = user_filter_choice == '1'
 
-# If filtering by page range, get the range and choice to include/exclude
+# Step 3: If filtering by page range, get the range and choice to include/exclude
 if choice in ('2', '3'):
     filter_page_range = True
     start_page = int(input("Enter the start page number: ")) - 1
@@ -44,11 +44,11 @@ if choice in ('2', '3'):
     page_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_page_range = page_filter_choice == '1'
 
-# Step 2: Ask if the user wants to deduplicate text within the notes
+# Step 4: Ask if the user wants to deduplicate text within the notes
 print("Do you want to deduplicate text within the notes? (y/n)")
 deduplicate_notes = input("Enter your choice: ").lower() == 'y'
 
-# Step 3: Ask if the user wants to update the timestamps
+# Step 5: Ask if the user wants to update the timestamps
 print("Do you want to update the 'created' and 'updated' fields to the current datetime? (y/n)")
 update_timestamp = input("Enter your choice: ").lower() == 'y'
 

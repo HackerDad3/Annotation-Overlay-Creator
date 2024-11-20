@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 # Load data from Excel file
-input_file = r"C:\Users\Willi\Downloads\LAY.JOH.025.xlsx" # Replace with your Excel file name
+input_file = r"C:\Users\Willi\Downloads\LAY.JOH.002 updated refrencesV2.xlsx"
 input_no_ext = os.path.splitext(os.path.basename(input_file))[0]
 
 # Load Aconex Reference sheet
