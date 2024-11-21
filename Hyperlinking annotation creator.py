@@ -4,7 +4,7 @@ import json
 import re
 from time import time
 import os
-from tqdm import tqdm  # Progress bar
+from tqdm import tqdm
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
@@ -67,9 +67,9 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
 
 # Read the target phrases and their links from the input file
 with open(input_file, newline='', encoding='utf-8') as file:
-    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm
+    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm progress bar thing
 
-    # Initialize tqdm progress bar
+    # Initialize tqdm progress bar thing
     for row in tqdm(reader, desc="Processing phrases"):
         phrase = row['Reference']
         link = row['Link']
@@ -90,7 +90,8 @@ with open(input_file, newline='', encoding='utf-8') as file:
                     rect = fitz.Rect(inst)
                     annotation_data = create_annotation_data(rect, page_num, phrase, link)
                     all_annotations.append(annotation_data)
-                break  # Stop searching after the first match is found
+                # Removed break to continue searching for all instances
+                # break
 
         # 2. **Search for Flexible Matches** (allow line breaks only at specific characters)
         if not matched:  # Only if no exact match was found
@@ -121,8 +122,8 @@ with open(input_file, newline='', encoding='utf-8') as file:
                             rect = fitz.Rect(quad)
                             annotation_data = create_annotation_data(rect, page_num, phrase, link)
                             all_annotations.append(annotation_data)
-
-                    break  # Stop searching after the first match is found
+                    # Removed break to continue searching for all instances
+                    # break
 
         # If no matches were found, log it as unmatched
         if not matched:
