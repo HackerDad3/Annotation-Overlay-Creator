@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 
 # Define input Excel file path
-input_file = r"C:\Users\Willi\Downloads\Colin Fox docs.xlsx"
+input_file = r"C:\Users\Willi\Downloads\Civmec EXP.FOX.002 Hyperlinking\EXP.FOX.002 Aconex Link List.xlsx"
 
 # Read the Excel file into a DataFrame and strip whitespace from column names
 df = pd.read_excel(input_file)
@@ -42,7 +42,7 @@ aconex_group = aconex_group[['Reference', 'Link']]
 # Step 5: Combine both groups into a single DataFrame
 combined_df = pd.concat([folder_group, aconex_group], ignore_index=True)
 
-# Generate the output file name
+# Generate the output file name so I don't have to paste all the file paths. 
 current_time = datetime.utcnow().strftime('%Y%m%dT%H%M_UTC')
 # Remove the extension from the input file name
 base_name = os.path.splitext(os.path.basename(input_file))[0]
@@ -53,4 +53,4 @@ output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
 # Save the DataFrame to CSV
 combined_df.to_csv(output_filepath, index=False, encoding='utf-8')
 
-print(f"Done! Grouped and deduplicated data saved to: {output_filepath}")
+print(f"Done! Go Me!! Grouped and deduplicated data saved to: {output_filepath}")
