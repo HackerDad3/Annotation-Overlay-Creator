@@ -16,6 +16,21 @@ pdf_directory = r"C:\Users\Willi\Downloads\OneDrive_1_14-11-2024"  # Directory c
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
 
+# Initialize output files (these will be created/updated once, not per PDF)
+annotation_output_csv = os.path.join(pdf_directory, "annotations_output.csv")
+phrases_output_csv = os.path.join(pdf_directory, "phrases_output.csv")
+
+# Write the headers for the CSV files once
+with open(annotation_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+    fieldnames = ['Bates/Control #', 'Annotation Data']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+
+with open(phrases_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+    fieldnames = ['Phrase', 'Matched']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+
 # Read the target phrases and their links from the input file
 with open(input_file, newline='', encoding='utf-8') as file:
     reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm progress bar
@@ -142,26 +157,16 @@ with open(input_file, newline='', encoding='utf-8') as file:
                     'Annotation Data': annotation_json
                 }
 
-                # Save the annotation data to the output CSV for this PDF
-                output_csv = os.path.join(pdf_directory, f"{pdf_filename_no_ext}_annotation_output.csv")
-                with open(output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+                # Append the annotation data to the existing CSV file
+                with open(annotation_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
                     fieldnames = ['Bates/Control #', 'Annotation Data']
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-                    # Write the header
-                    writer.writeheader()
-
-                    # Write the single annotation group to the CSV
                     writer.writerow(output_data)
 
-            # Create CSV for matched and unmatched phrases for this PDF
-            phrases_output_csv = os.path.join(pdf_directory, f"{pdf_filename_no_ext}_phrases_output.csv")
-            with open(phrases_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+            # Append matched and unmatched phrases to the existing CSV file
+            with open(phrases_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
                 fieldnames = ['Phrase', 'Matched']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-                # Write the header
-                writer.writeheader()
 
                 # Write matched phrases
                 for phrase in matched_phrases:
