@@ -1,9 +1,10 @@
 import pandas as pd
 import os
 from datetime import datetime
+import pytz  # Import pytz for timezone conversion
 
 # Define input Excel file path
-input_file = r"C:\Users\Willi\Downloads\Civmec EXP.FOX.002 Hyperlinking\EXP.FOX.002 Aconex Link List.xlsx"
+input_file = r"C:\Users\Willi\Downloads\Civmec EXP.FOX.002 Hyperlinking\Colin Fox Aconex Refrences.xlsx"
 
 # Read the Excel file into a DataFrame and strip whitespace from column names
 df = pd.read_excel(input_file)
@@ -42,10 +43,14 @@ aconex_group = aconex_group[['Reference', 'Link']]
 # Step 5: Combine both groups into a single DataFrame
 combined_df = pd.concat([folder_group, aconex_group], ignore_index=True)
 
-# Generate the output file name so I don't have to paste all the file paths. 
-current_time = datetime.utcnow().strftime('%Y%m%dT%H%M_UTC')
+# Generate the output file name with 'Australia/Perth' time zone
+utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)  # Get the current UTC time
+perth_tz = pytz.timezone('Australia/Perth')  # Define 'Australia/Perth' timezone
+current_time = utc_now.astimezone(perth_tz).strftime('%Y%m%dT%H%M_UTC8')
+
 # Remove the extension from the input file name
 base_name = os.path.splitext(os.path.basename(input_file))[0]
+
 # Construct output filename based on report value and base name
 output_filename = f"{current_time}_{base_name}_{report_value}.csv"
 output_filepath = os.path.join(os.path.dirname(input_file), output_filename)
