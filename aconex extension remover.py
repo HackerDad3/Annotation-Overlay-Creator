@@ -30,5 +30,5 @@ def process_filenames(input_file):
     print(f"Processed filenames have been written to {output_file}")
 
 # Example usage
-input_file = r"C:\Users\Willi\Downloads\Civmec EXP.FOX.002 Hyperlinking\Colin Fox Filenames.txt"
+input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec LAY.MUR.001 Hyperlinking\LAY.MUR.001 Filenames.txt"
 process_filenames(input_file)
