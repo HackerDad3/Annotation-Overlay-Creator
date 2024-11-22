@@ -9,16 +9,22 @@ from tqdm import tqdm
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
 
+#output prefix
+output_prefix = "LAY.MCC.004"
+
 # File paths
-input_file = r"C:\Users\Willi\Downloads\20241114T0304_UTC_LAY.JOH.002 refrences_LAY.JOH.002.csv"
-pdf_directory = r"C:\Users\Willi\Downloads\OneDrive_1_14-11-2024"  # Directory containing PDFs
+input_file = r"D:\Download\20241122T0948_UTC8_LAY.MCC.004 Aconex References_LAY.MCC.004.0001_0001.csv"
+pdf_directory = r"D:\Download\LAY.MCC.004Image\LAY.MCC.004Image\images"
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
 
+# Get the directory where the input CSV is located
+input_directory = os.path.dirname(input_file)
+
 # Initialize output files (these will be created/updated once, not per PDF)
-annotation_output_csv = os.path.join(pdf_directory, "annotations_output.csv")
-phrases_output_csv = os.path.join(pdf_directory, "phrases_output.csv")
+annotation_output_csv = os.path.join(input_directory, F"{output_prefix}_annotations_output.csv")
+phrases_output_csv = os.path.join(input_directory, F"{output_prefix}_phrases_output.csv")
 
 # Write the headers for the CSV files once
 with open(annotation_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
