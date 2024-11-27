@@ -30,5 +30,12 @@ def process_filenames(input_file):
     print(f"Processed filenames have been written to {output_file}")
 
 # Example usage
-input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec LAY.MUR.001 Hyperlinking\LAY.MUR.001 Filenames.txt"
+# input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec LAY.MCC.004 Hyperlinking\LAY.MCC.004 Filenames.txt"
+
+# user input filepath
+input_file = input("Enter filepath for text file containing filenames: ").strip().strip('"')
+
+# normalise path
+input_file = os.path.normpath(input_file)
+
 process_filenames(input_file)
