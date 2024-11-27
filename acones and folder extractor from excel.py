@@ -4,7 +4,11 @@ from datetime import datetime
 import pytz  # Import pytz for timezone conversion
 
 # Define input Excel file path
-input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec LAY.MUR.001 Hyperlinking\LAY.MUR.001 Aconex References.xlsx"
+# input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec LAY.MCC.004 Hyperlinking\LAY.MCC.004 Aconex References.xlsx"
+input_file = input("Paste the filepath for the Excel file with link refrences: ").strip().strip('"')
+
+#normalize path
+input_file = os.path.normpath(input_file)
 
 # Read the Excel file into a DataFrame and strip whitespace from column names
 df = pd.read_excel(input_file)
