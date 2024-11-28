@@ -1,0 +1,8 @@
+Report only show primary file paths if its different the duplicate paths
+
+=IF(B6=E6,"",B6)
+
+
+link formula.  bates must be K and filename must be link
+
+=CONCAT(K2," (",L2,")<br>")
