@@ -27,7 +27,7 @@ remove_list = [
     # General Ambiguous Words
     "email", "emails", "attachment", "file", "document", "page", "link", "reference", 
     "item", "note", "copy", "section", "aconex", "attachments", "invoice", "embedded",
-    
+    "layout", "photo", "photos", "nrtjv", "attach",
     
     # # Filler Words
     # "here", "there", "this", "that",
