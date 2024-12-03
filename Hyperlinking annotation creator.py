@@ -10,8 +10,15 @@ from tqdm import tqdm
 user_email = "trial.solutions@advancediscovery.io"
 
 # File paths
-input_file = r"C:\Users\Willi\Downloads\20241114T0304_UTC_LAY.JOH.002 refrences_LAY.JOH.002.csv"
-pdf_file = r"C:\Users\Willi\Downloads\OneDrive_1_14-11-2024\LAY.JOH.002.0001_0001.pdf"
+# input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec EXP.TSI.003 Hyperlinking\20241127T1021_UTC8_EXP.TSI.003 Link Refrences_EXP.TSI.003.0001_0001_Cleaned.csv"
+# pdf_file = r"C:\Users\Willi\Downloads\EXP.TSI.003Image\EXP.TSI.003Image\images\EXP.TSI.003.0001_0001.pdf"
+input_csv_file = input("Paste CSV file path: ").strip().strip('"')
+pdf_input_file = input("Paste pdf Image filepath: ").strip().strip('"')
+
+# normalize path
+input_file = os.path.normpath(input_csv_file)
+pdf_file = os.path.normpath(pdf_input_file)
+
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
