@@ -4,7 +4,10 @@ import pandas as pd
 import time
 
 # Input file path
-input_file = r"C:\Users\Willi\Downloads\20241115T1029_UTC8_NRTIJV_Reports_Backup - Copy.csv"
+# input_file = r"C:\Users\Willi\Downloads\20241115T1029_UTC8_NRTIJV_Reports_Backup - Copy.csv"
+csv_file = input("Paste CSV filepath: ").strip().strip('"')
+input_file = os.path.normpath(csv_file)
+
 
 # Create the output file path
 base_name = os.path.splitext(os.path.basename(input_file))[0]
