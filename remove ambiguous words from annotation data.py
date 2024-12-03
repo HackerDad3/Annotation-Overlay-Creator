@@ -47,7 +47,7 @@ remove_list = [
     # General Ambiguous Words
     "email", "emails", "attachment", "file", "document", "page", "link", "reference", 
     "item", "note", "copy", "section", "aconex", "attachments", "invoice", "embedded",
-    "layout", "photo", "photos", "nrtjv", "attach",
+    "layout", "photo", "photos", "nrtjv", "attach", "clash", "comments", "comment"
     
     # Vague Temporal References
     "now", "later", "soon", "currently", "previously",
