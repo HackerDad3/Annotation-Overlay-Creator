@@ -10,29 +10,48 @@ from tqdm import tqdm
 user_email = "trial.solutions@advancediscovery.io"
 
 # File paths
-# input_file = r"C:\Users\Willi\Downloads\Civmec Reports and Overlays\Civmec EXP.TSI.003 Hyperlinking\20241127T1021_UTC8_EXP.TSI.003 Link Refrences_EXP.TSI.003.0001_0001_Cleaned.csv"
-# pdf_file = r"C:\Users\Willi\Downloads\EXP.TSI.003Image\EXP.TSI.003Image\images\EXP.TSI.003.0001_0001.pdf"
 input_csv_file = input("Paste CSV file path: ").strip().strip('"')
-pdf_input_file = input("Paste pdf Image filepath: ").strip().strip('"')
+pdf_directory = input("Paste directory containing PDF files: ").strip().strip('"')
 
-# normalize path
+# Normalize paths
 input_file = os.path.normpath(input_csv_file)
-pdf_file = os.path.normpath(pdf_input_file)
-
+pdf_dir = os.path.normpath(pdf_directory)
 
 # Determine delimiter based on file extension
 input_delimiter = '\t' if input_file.endswith('.txt') else ','
 
-# Get the file name without extension for the "Bates/Control #" column
-pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_file))[0]
+# Output directory (same as input CSV file's directory)
+output_dir = os.path.dirname(input_file)
 
-# Open the PDF file
-doc = fitz.open(pdf_file)
+# Combined output file paths
+annotation_output_csv = os.path.join(output_dir, "combined_annotation_output.csv")
+phrases_output_csv = os.path.join(output_dir, "combined_phrases_output.csv")
 
-# Create lists to store all annotation data and track matched/unmatched phrases
-all_annotations = []
-matched_phrases = []
-unmatched_phrases = []
+# Initialize the output files with headers
+if not os.path.exists(annotation_output_csv):
+    with open(annotation_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['Bates/Control #', 'Annotation Data']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+if not os.path.exists(phrases_output_csv):
+    with open(phrases_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['Document', 'Phrase', 'Matched']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+# Function to normalize text
+def normalize_text(text):
+    """Normalize text for consistent matching."""
+    return (
+        text.replace('–', '-')  # Replace en dash with hyphen
+            .replace('—', '-')  # Replace em dash with hyphen
+            .replace('“', '"')  # Replace left double quotes
+            .replace('”', '"')  # Replace right double quotes
+            .replace('‘', "'")  # Replace left single quotes
+            .replace('’', "'")  # Replace right single quotes
+            .lower()  # Make the text lowercase for case-insensitive comparison
+    )
 
 # Function to generate the escaped JSON string for annotation data
 def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
@@ -58,7 +77,7 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
                 "created": timestamp,
                 "parentType": "Highlight",
                 "parentId": 0,
-                "id": 0,  
+                "id": 0,
                 "user": user,
                 "docId": 0,
                 "security": ["WRITE", "READ", "ADMIN"]
@@ -69,112 +88,85 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
         "unit": "point",
         "markedText": phrase
     }
-    # Convert to a JSON string and escape it
     return json.dumps(annotation_data).replace('"', '\\"')
 
 # Read the target phrases and their links from the input file
 with open(input_file, newline='', encoding='utf-8') as file:
-    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm progress bar thing
+    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm progress bar
 
-    # Initialize tqdm progress bar thing
-    for row in tqdm(reader, desc="Processing phrases"):
-        phrase = row['Reference']
-        link = row['Link']
-        matched = False  # Flag to track if the phrase is matched
+# Process each PDF in the directory
+for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
+    if pdf_file.endswith('.pdf'):
+        pdf_path = os.path.join(pdf_dir, pdf_file)
+        pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_path))[0]
 
-        # 1. **Search for Exact Matches** (search for raw phrase)
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            
-            # Search for the exact phrase
-            instances = page.search_for(phrase)
-            
-            if instances:
-                matched = True
-                matched_phrases.append(phrase)
-                # Generate annotation data for each exact match
-                for inst in instances:
-                    rect = fitz.Rect(inst)
-                    annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                    all_annotations.append(annotation_data)
-                # Removed break to continue searching for all instances
-                # break
+        # Open the PDF file
+        doc = fitz.open(pdf_path)
 
-        # 2. **Search for Flexible Matches** (allow line breaks only at specific characters)
-        if not matched:  # Only if no exact match was found
-            # Create a regex pattern allowing line breaks at specific points (e.g., after hyphens or commas)
-            flexible_pattern = re.escape(phrase)
-            flexible_pattern = flexible_pattern.replace(r'\-', r'\-\s*').replace(r'\,', r'\,\s*')
+        # Create lists to store all annotation data and track matched/unmatched phrases
+        all_annotations = []
+        phrase_matches = []  # To track matches for this document
 
+        for row in tqdm(reader, desc=f"Processing phrases in {pdf_file}"):
+            phrase = normalize_text(row['Reference'])  # Normalize phrase from CSV
+            link = row['Link']
+            matched = False  # Flag to track if the phrase is matched
+
+            # 1. **Search for Exact Matches Using Regex**
+            word_boundary_pattern = rf"\b{re.escape(phrase)}\b(?![_\w])"  # Exact match, no trailing alphanumeric or underscores
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
-                
-                # Extract the full page text with line breaks preserved
-                page_text = page.get_text("text")
-
-                # Search for the phrase in the page text using regex
-                for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
+                page_text = normalize_text(page.get_text("text"))  # Normalize PDF text
+                for match in re.finditer(word_boundary_pattern, page_text, re.IGNORECASE):
                     matched = True
-                    matched_phrases.append(phrase)
-                    
-                    # Highlight each line within the match to handle line breaks
-                    start, end = match.span()
-                    match_text = page_text[start:end]
-                    lines = match_text.splitlines()  # Split matched text by lines
 
-                    # Generate annotation data for each line separately
-                    for line in lines:
-                        quads = page.search_for(line)  # Search for each line
-                        for quad in quads:
-                            rect = fitz.Rect(quad)
-                            annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                            all_annotations.append(annotation_data)
-                    # Removed break to continue searching for all instances
-                    # break
+                    # Extract the matched text's location
+                    quads = page.search_for(match.group())
+                    for quad in quads:
+                        rect = fitz.Rect(quad)
+                        annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                        all_annotations.append(annotation_data)
 
-        # If no matches were found, log it as unmatched
-        if not matched:
-            unmatched_phrases.append(phrase)
+            # 2. **Search for Multi-Line Matches**
+            if not matched:  # Only if no exact match was found
+                flexible_pattern = re.escape(phrase)
+                flexible_pattern = flexible_pattern.replace(r'\-', r'\-\s*').replace(r'\ ', r'\s+')
+                flexible_pattern = rf"\b{flexible_pattern}\b(?![_\w])"
 
-# Combine all the annotations into the final JSON annotation group
-if all_annotations:
-    combined_annotations = "\\u0013".join(all_annotations)
-    annotation_json = f"{{\"Highlights\":\"{combined_annotations}\"}}"
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    page_text = normalize_text(page.get_text("text"))  # Normalize PDF text
 
-    # Prepare the output CSV row
-    output_data = {
-        'Bates/Control #': pdf_filename_no_ext,
-        'Annotation Data': annotation_json
-    }
+                    for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
+                        matched = True
 
-    # Save the annotation data to the output CSV
-    output_csv = os.path.join(os.path.dirname(input_file), f"{pdf_filename_no_ext}_annotation_output.csv")
-    with open(output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['Bates/Control #', 'Annotation Data']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        # Highlight each line within the match to handle line breaks
+                        start, end = match.span()
+                        match_text = page_text[start:end]
+                        lines = match_text.splitlines()
 
-        # Write the header
-        writer.writeheader()
+                        for line in lines:
+                            quads = page.search_for(line)
+                            for quad in quads:
+                                rect = fitz.Rect(quad)
+                                annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                                all_annotations.append(annotation_data)
 
-        # Write the single annotation group to the CSV
-        writer.writerow(output_data)
+            # Log the match status for this phrase
+            phrase_matches.append({'Document': pdf_filename_no_ext, 'Phrase': row['Reference'], 'Matched': 'Yes' if matched else 'No'})
 
-# Create CSV for matched and unmatched phrases
-phrases_output_csv = os.path.join(os.path.dirname(input_file), f"{pdf_filename_no_ext}_phrases_output.csv")
-with open(phrases_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
-    fieldnames = ['Phrase', 'Matched']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        # Append annotations to the single output CSV
+        if all_annotations:
+            combined_annotations = "\\u0013".join(all_annotations)
+            annotation_json = f"{{\"Highlights\":\"{combined_annotations}\"}}"
+            with open(annotation_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=['Bates/Control #', 'Annotation Data'])
+                writer.writerow({'Bates/Control #': pdf_filename_no_ext, 'Annotation Data': annotation_json})
 
-    # Write the header
-    writer.writeheader()
+        # Append phrase matches to the single output CSV
+        with open(phrases_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=['Document', 'Phrase', 'Matched'])
+            writer.writerows(phrase_matches)
 
-    # Write matched phrases
-    for phrase in matched_phrases:
-        writer.writerow({'Phrase': phrase, 'Matched': 'Yes'})
-    
-    # Write unmatched phrases
-    for phrase in unmatched_phrases:
-        writer.writerow({'Phrase': phrase, 'Matched': 'No'})
-
-# Close the PDF document
-doc.close()
+        # Close the PDF document
+        doc.close()

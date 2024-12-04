@@ -48,7 +48,7 @@ remove_list = [
     "email", "emails", "attachment", "file", "document", "page", "link", "reference", 
     "item", "note", "copy", "section", "aconex", "attachments", "invoice", "embedded",
     "layout", "photo", "photos", "nrtjv", "attach", "clash", "comments", "comment",
-    "capture", "instruction", "position", "rates", 
+    "capture", "instruction", "position", "rates",
     
     # Vague Temporal References
     "now", "later", "soon", "currently", "previously",
