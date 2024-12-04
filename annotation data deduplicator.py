@@ -3,7 +3,11 @@ import json
 import pandas as pd
 
 # Input file path
-input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
+# input_file = r"C:\Users\Willi\Downloads\Annotation Test\Annotation creation\Input file.csv"
+input_csv = input("Paste CSV file path here: ")
+
+# normalise path
+input_file = os.path.normpath(input_csv)
 
 # Output file creation
 base_name = os.path.splitext(os.path.basename(input_file))[0]
