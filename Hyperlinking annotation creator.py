@@ -103,8 +103,8 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
         # Open the PDF file
         doc = fitz.open(pdf_path)
 
-        # Create lists to store all annotation data and track matched/unmatched phrases
-        all_annotations = []
+        # Create a set to track unique annotations
+        unique_annotations = set()  # Store tuples of (page_num, x0, y0, width, height, marked_text, notes_text)
         phrase_matches = []  # To track matches for this document
 
         for row in tqdm(reader, desc=f"Processing phrases in {pdf_file}"):
@@ -124,8 +124,9 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
                     quads = page.search_for(match.group())
                     for quad in quads:
                         rect = fitz.Rect(quad)
-                        annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                        all_annotations.append(annotation_data)
+                        annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, match.group(), link)
+                        if annotation_key not in unique_annotations:
+                            unique_annotations.add(annotation_key)  # Add the annotation key to the set
 
             # 2. **Search for Multi-Line Matches**
             if not matched:  # Only if no exact match was found
@@ -149,14 +150,22 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
                             quads = page.search_for(line)
                             for quad in quads:
                                 rect = fitz.Rect(quad)
-                                annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                                all_annotations.append(annotation_data)
+                                annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, line, link)
+                                if annotation_key not in unique_annotations:
+                                    unique_annotations.add(annotation_key)  # Add the annotation key to the set
 
             # Log the match status for this phrase
             phrase_matches.append({'Document': pdf_filename_no_ext, 'Phrase': row['Reference'], 'Matched': 'Yes' if matched else 'No'})
 
         # Append annotations to the single output CSV
-        if all_annotations:
+        if unique_annotations:
+            all_annotations = []
+            for annotation in unique_annotations:
+                page_num, x0, y0, width, height, marked_text, notes_text = annotation
+                rect = fitz.Rect(x0, y0, x0 + width, y0 + height)
+                annotation_data = create_annotation_data(rect, page_num, marked_text, notes_text)
+                all_annotations.append(annotation_data)
+
             combined_annotations = "\\u0013".join(all_annotations)
             annotation_json = f"{{\"Highlights\":\"{combined_annotations}\"}}"
             with open(annotation_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
