@@ -112,47 +112,28 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
             link = row['Link']
             matched = False  # Flag to track if the phrase is matched
 
-            # 1. **Search for Exact Matches Using Regex**
-            word_boundary_pattern = rf"\b{re.escape(phrase)}\b(?![_\w])"  # Exact match, no trailing alphanumeric or underscores
+            # Retrieve raw page text and normalized text
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
-                page_text = normalize_text(page.get_text("text"))  # Normalize PDF text
-                for match in re.finditer(word_boundary_pattern, page_text, re.IGNORECASE):
+                raw_page_text = page.get_text("text")  # Original PDF text
+                normalized_page_text = normalize_text(raw_page_text)  # Normalize for matching
+
+                # Search for the phrase in normalized text
+                for match in re.finditer(rf"\b{re.escape(phrase)}\b", normalized_page_text, re.IGNORECASE):
                     matched = True
+                    start, end = match.span()
 
-                    # Extract the matched text's location
-                    quads = page.search_for(match.group())
-                    for quad in quads:
-                        rect = fitz.Rect(quad)
-                        annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, match.group(), link)
-                        if annotation_key not in unique_annotations:
-                            unique_annotations.add(annotation_key)  # Add the annotation key to the set
+                    # Extract original PDF text for search_for
+                    original_pdf_text = raw_page_text[start:end]
 
-            # 2. **Search for Multi-Line Matches**
-            if not matched:  # Only if no exact match was found
-                flexible_pattern = re.escape(phrase)
-                flexible_pattern = flexible_pattern.replace(r'\-', r'\-\s*').replace(r'\ ', r'\s+')
-                flexible_pattern = rf"\b{flexible_pattern}\b(?![_\w])"
-
-                for page_num in range(len(doc)):
-                    page = doc.load_page(page_num)
-                    page_text = normalize_text(page.get_text("text"))  # Normalize PDF text
-
-                    for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
-                        matched = True
-
-                        # Highlight each line within the match to handle line breaks
-                        start, end = match.span()
-                        match_text = page_text[start:end]
-                        lines = match_text.splitlines()
-
-                        for line in lines:
-                            quads = page.search_for(line)
-                            for quad in quads:
-                                rect = fitz.Rect(quad)
-                                annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, line, link)
-                                if annotation_key not in unique_annotations:
-                                    unique_annotations.add(annotation_key)  # Add the annotation key to the set
+                    # Use the original PDF text for `search_for`
+                    quads = page.search_for(original_pdf_text)
+                    if quads:
+                        for quad in quads:
+                            rect = fitz.Rect(quad)
+                            annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, original_pdf_text, link)
+                            if annotation_key not in unique_annotations:
+                                unique_annotations.add(annotation_key)
 
             # Log the match status for this phrase
             phrase_matches.append({'Document': pdf_filename_no_ext, 'Phrase': row['Reference'], 'Matched': 'Yes' if matched else 'No'})
