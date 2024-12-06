@@ -48,7 +48,8 @@ remove_list = [
     "email", "emails", "attachment", "file", "document", "page", "link", "reference", 
     "item", "note", "copy", "section", "aconex", "attachments", "invoice", "embedded",
     "layout", "photo", "photos", "nrtjv", "attach", "clash", "comments", "comment",
-    "capture", "instruction", "position", "rates",
+    "capture", "instruction", "position", "rates", "fw", "img", "inv", "nrw", "re",
+    "screenshot", "example",
     
     # Vague Temporal References
     "now", "later", "soon", "currently", "previously",
@@ -70,7 +71,8 @@ remove_list = [
 
 # Regex patterns to match numbers or specific patterns
 regex_patterns = [
-    r"\d{1,2}",         # Matches 1 or 2-digit numbers (e.g., 1, 23)
+    r"\d{1,4}",         # Matches 1 or 2-digit numbers (e.g., 1, 23)
+    r"\d{1}(\.\d+)?",
     # r"\d{3,4}",         # Matches 3 or 4-digit numbers (e.g., 123, 4567)
     # r"A\d{1}",          # Matches patterns like A1, A2
     # r"\d{1}-\d{2}",     # Matches patterns like 1-23, 5-99
