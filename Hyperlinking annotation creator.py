@@ -3,11 +3,14 @@ import csv
 import json
 import re
 from time import time
+import datetime
 import os
 from tqdm import tqdm
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
+
+document_number = input("Main Document number: ")
 
 # File paths
 input_csv_file = input("Paste CSV file path: ").strip().strip('"')
@@ -23,9 +26,11 @@ input_delimiter = '\t' if input_file.endswith('.txt') else ','
 # Output directory (same as input CSV file's directory)
 output_dir = os.path.dirname(input_file)
 
+current_date = datetime.datetime.now().strftime("%Y%m%d")
+
 # Combined output file paths
-annotation_output_csv = os.path.join(output_dir, "combined_annotation_output.csv")
-phrases_output_csv = os.path.join(output_dir, "combined_phrases_output.csv")
+annotation_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_annotation_output.csv")
+phrases_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_phrases_output.csv")
 
 # Initialize the output files with headers
 if not os.path.exists(annotation_output_csv):
