@@ -58,6 +58,11 @@ def normalize_text(text):
             .lower()  # Make the text lowercase for case-insensitive comparison
     )
 
+# Function to split the phrase into chunks
+def split_phrase_into_chunks(phrase):
+    """Split the phrase into chunks for better matching across lines."""
+    return phrase.split('-')  # Assuming the phrase uses hyphen to separate logical chunks
+
 # Function to generate the escaped JSON string for annotation data
 def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
     timestamp = int(time() * 1000)  # Current time in milliseconds
@@ -117,28 +122,37 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
             link = row['Link']
             matched = False  # Flag to track if the phrase is matched
 
+            # Split the phrase into chunks (based on hyphen, can change this logic based on pattern)
+            phrase_chunks = split_phrase_into_chunks(phrase)
+
             # Retrieve raw page text and normalized text
             for page_num in range(len(doc)):
                 page = doc.load_page(page_num)
                 raw_page_text = page.get_text("text")  # Original PDF text
-                normalized_page_text = normalize_text(raw_page_text)  # Normalize for matching
+                lines = raw_page_text.split("\n")  # Split the page text into lines
 
-                # Search for the phrase in normalized text
-                for match in re.finditer(rf"\b{re.escape(phrase)}\b", normalized_page_text, re.IGNORECASE):
-                    matched = True
-                    start, end = match.span()
+                # Iterate over each line and check for matches with phrase chunks
+                for i in range(len(lines)):
+                    # Normalize the current line
+                    current_line = normalize_text(lines[i])
 
-                    # Extract original PDF text for search_for
-                    original_pdf_text = raw_page_text[start:end]
+                    # Attempt to find chunks across consecutive lines
+                    for j in range(i, len(lines)):
+                        next_line = normalize_text(lines[j])
 
-                    # Use the original PDF text for `search_for`
-                    quads = page.search_for(original_pdf_text)
-                    if quads:
-                        for quad in quads:
-                            rect = fitz.Rect(quad)
-                            annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, original_pdf_text, link)
-                            if annotation_key not in unique_annotations:
-                                unique_annotations.add(annotation_key)
+                        # Check if the chunk from this line and the next line match the phrase chunk
+                        merged_line = current_line + " " + next_line
+                        if all(chunk in merged_line for chunk in phrase_chunks):
+                            matched = True
+                            # After a match, find the corresponding quads in the PDF
+                            quads = page.search_for(phrase)  # Search for the full phrase in the merged line
+                            if quads:
+                                for quad in quads:
+                                    rect = fitz.Rect(quad)
+                                    annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, phrase, link)
+                                    if annotation_key not in unique_annotations:
+                                        unique_annotations.add(annotation_key)
+                            break
 
             # Log the match status for this phrase
             phrase_matches.append({'Document': pdf_filename_no_ext, 'Phrase': row['Reference'], 'Matched': 'Yes' if matched else 'No'})
