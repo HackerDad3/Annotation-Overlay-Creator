@@ -3,9 +3,9 @@ import csv
 import json
 import re
 from time import time
-import datetime
 import os
 from tqdm import tqdm
+import datetime
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
@@ -45,39 +45,16 @@ if not os.path.exists(phrases_output_csv):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-# Function to normalize text
-def normalize_text(text):
-    """Normalize text for consistent matching."""
-    return (
-        text.replace('–', '-')  # Replace en dash with hyphen
-            .replace('—', '-')  # Replace em dash with hyphen
-            .replace('“', '"')  # Replace left double quotes
-            .replace('”', '"')  # Replace right double quotes
-            .replace('‘', "'")  # Replace left single quotes
-            .replace('’', "'")  # Replace right single quotes
-            .lower()  # Make the text lowercase for case-insensitive comparison
-    )
-
-# Function to split the phrase into chunks
-def split_phrase_into_chunks(phrase):
-    """Split the phrase into chunks for better matching across lines."""
-    return phrase.split('-')  # Assuming the phrase uses hyphen to separate logical chunks
-
 # Function to generate the escaped JSON string for annotation data
 def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
-    timestamp = int(time() * 1000)  # Current time in milliseconds
+    timestamp = int(time() * 1000)
     annotation_data = {
         "rectangles": {
             "rectangles": [
-                {
-                    "x": rectangles.x0,
-                    "y": rectangles.y0,
-                    "width": rectangles.width,
-                    "height": rectangles.height
-                }
+                {"x": rectangles.x0, "y": rectangles.y0, "width": rectangles.width, "height": rectangles.height}
             ],
             "pageNum": page_num,
-            "color": "BLUE"
+            "color": "BLUE",
         },
         "created": timestamp,
         "updated": timestamp,
@@ -90,92 +67,81 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
                 "id": 0,
                 "user": user,
                 "docId": 0,
-                "security": ["WRITE", "READ", "ADMIN"]
+                "security": ["WRITE", "READ", "ADMIN"],
             }
         ],
         "id": 0,
         "user": user,
         "unit": "point",
-        "markedText": phrase
+        "markedText": phrase,
     }
     return json.dumps(annotation_data).replace('"', '\\"')
-
-# Read the target phrases and their links from the input file
-with open(input_file, newline='', encoding='utf-8') as file:
-    reader = list(csv.DictReader(file, delimiter=input_delimiter))  # Convert to list for tqdm progress bar
 
 # Process each PDF in the directory
 for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
     if pdf_file.endswith('.pdf'):
         pdf_path = os.path.join(pdf_dir, pdf_file)
-        pdf_filename_no_ext = os.path.splitext(os.path.basename(pdf_path))[0]
 
-        # Open the PDF file
         doc = fitz.open(pdf_path)
+        all_annotations = []
+        phrase_matches = []
 
-        # Create a set to track unique annotations
-        unique_annotations = set()  # Store tuples of (page_num, x0, y0, width, height, marked_text, notes_text)
-        phrase_matches = []  # To track matches for this document
+        with open(input_file, newline='', encoding='utf-8') as file:
+            reader = list(csv.DictReader(file, delimiter=input_delimiter))
 
-        for row in tqdm(reader, desc=f"Processing phrases in {pdf_file}"):
-            phrase = normalize_text(row['Reference'])  # Normalize phrase from CSV
-            link = row['Link']
-            matched = False  # Flag to track if the phrase is matched
+            for row in tqdm(reader, desc=f"Processing phrases in {pdf_file}"):
+                phrase = row['Reference']
+                link = row['Link']
+                matched = False
 
-            # Split the phrase into chunks (based on hyphen, can change this logic based on pattern)
-            phrase_chunks = split_phrase_into_chunks(phrase)
+                # Search for exact matches
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    instances = page.search_for(phrase)
 
-            # Retrieve raw page text and normalized text
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                raw_page_text = page.get_text("text")  # Original PDF text
-                lines = raw_page_text.split("\n")  # Split the page text into lines
+                    if instances:
+                        matched = True
+                        for inst in instances:
+                            rect = fitz.Rect(inst)
+                            annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                            all_annotations.append(annotation_data)
 
-                # Iterate over each line and check for matches with phrase chunks
-                for i in range(len(lines)):
-                    # Normalize the current line
-                    current_line = normalize_text(lines[i])
+                # Flexible regex-based matching
+                if not matched:
+                    flexible_pattern = re.escape(phrase).replace(r'\-', r'\-\s*').replace(r'\,', r'\,\s*')
 
-                    # Attempt to find chunks across consecutive lines
-                    for j in range(i, len(lines)):
-                        next_line = normalize_text(lines[j])
+                    for page_num in range(len(doc)):
+                        page = doc.load_page(page_num)
+                        page_text = page.get_text("text")
 
-                        # Check if the chunk from this line and the next line match the phrase chunk
-                        merged_line = current_line + " " + next_line
-                        if all(chunk in merged_line for chunk in phrase_chunks):
+                        for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
                             matched = True
-                            # After a match, find the corresponding quads in the PDF
-                            quads = page.search_for(phrase)  # Search for the full phrase in the merged line
-                            if quads:
+                            start, end = match.span()
+                            match_text = page_text[start:end]
+                            lines = match_text.splitlines()
+
+                            for line in lines:
+                                quads = page.search_for(line)
                                 for quad in quads:
                                     rect = fitz.Rect(quad)
-                                    annotation_key = (page_num, rect.x0, rect.y0, rect.width, rect.height, phrase, link)
-                                    if annotation_key not in unique_annotations:
-                                        unique_annotations.add(annotation_key)
-                            break
+                                    annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                                    all_annotations.append(annotation_data)
 
-            # Log the match status for this phrase
-            phrase_matches.append({'Document': pdf_filename_no_ext, 'Phrase': row['Reference'], 'Matched': 'Yes' if matched else 'No'})
+                # Log phrase matches
+                phrase_matches.append({'Document': pdf_file, 'Phrase': phrase, 'Matched': 'Yes' if matched else 'No'})
 
-        # Append annotations to the single output CSV
-        if unique_annotations:
-            all_annotations = []
-            for annotation in unique_annotations:
-                page_num, x0, y0, width, height, marked_text, notes_text = annotation
-                rect = fitz.Rect(x0, y0, x0 + width, y0 + height)
-                annotation_data = create_annotation_data(rect, page_num, marked_text, notes_text)
-                all_annotations.append(annotation_data)
-
+        # Save annotations to output
+        if all_annotations:
             combined_annotations = "\\u0013".join(all_annotations)
             annotation_json = f"{{\"Highlights\":\"{combined_annotations}\"}}"
+
             with open(annotation_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=['Bates/Control #', 'Annotation Data'])
-                writer.writerow({'Bates/Control #': pdf_filename_no_ext, 'Annotation Data': annotation_json})
+                writer.writerow({'Bates/Control #': pdf_file, 'Annotation Data': annotation_json})
 
-        # Append phrase matches to the single output CSV
+        # Save phrase matches
         with open(phrases_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=['Document', 'Phrase', 'Matched'])
             writer.writerows(phrase_matches)
 
-        # Close the PDF document
         doc.close()
