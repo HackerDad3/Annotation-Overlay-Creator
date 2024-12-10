@@ -49,7 +49,7 @@ remove_list = [
     "item", "note", "copy", "section", "aconex", "attachments", "invoice", "embedded",
     "layout", "photo", "photos", "nrtjv", "attach", "clash", "comments", "comment",
     "capture", "instruction", "position", "rates", "fw", "img", "inv", "nrw", "re",
-    "screenshot", "example",
+    "screenshot", "example", "nan",
     
     # Vague Temporal References
     "now", "later", "soon", "currently", "previously",
