@@ -45,6 +45,9 @@ if not os.path.exists(phrases_output_csv):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
+# Initialize a set to track unique annotations based on page number, marked text, and coordinates
+added_annotations = set()
+
 # Function to generate the escaped JSON string for annotation data
 def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
     timestamp = int(time() * 1000)
@@ -75,7 +78,17 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
         "unit": "point",
         "markedText": phrase,
     }
-    return json.dumps(annotation_data).replace('"', '\\"')
+
+    # Create a unique identifier for the annotation (combination of page number, bounding box, and marked text)
+    annotation_key = (page_num, phrase, rectangles.x0, rectangles.y0, rectangles.width, rectangles.height)
+    
+    # If the annotation has not been added before, add it to the set and return the annotation data
+    if annotation_key not in added_annotations:
+        added_annotations.add(annotation_key)
+        return json.dumps(annotation_data).replace('"', '\\"')
+    
+    # If the annotation is a duplicate, return None
+    return None
 
 # Process each PDF in the directory
 for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
@@ -104,7 +117,9 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
                         for inst in instances:
                             rect = fitz.Rect(inst)
                             annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                            all_annotations.append(annotation_data)
+
+                            if annotation_data:  # Only add if it's not a duplicate
+                                all_annotations.append(annotation_data)
 
                 # Flexible regex-based matching
                 if not matched:
@@ -125,7 +140,9 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
                                 for quad in quads:
                                     rect = fitz.Rect(quad)
                                     annotation_data = create_annotation_data(rect, page_num, phrase, link)
-                                    all_annotations.append(annotation_data)
+
+                                    if annotation_data:  # Only add if it's not a duplicate
+                                        all_annotations.append(annotation_data)
 
                 # Log phrase matches
                 phrase_matches.append({'Document': pdf_file, 'Phrase': phrase, 'Matched': 'Yes' if matched else 'No'})
