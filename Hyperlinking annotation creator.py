@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-import csv
+import pandas as pd  # Import pandas for CSV processing
 import json
 import re
 from time import time
@@ -32,18 +32,9 @@ current_date = datetime.datetime.now().strftime("%Y%m%d")
 annotation_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_annotation_output.csv")
 phrases_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_phrases_output.csv")
 
-# Initialize the output files with headers
-if not os.path.exists(annotation_output_csv):
-    with open(annotation_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['Bates/Control #', 'Annotation Data']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-
-if not os.path.exists(phrases_output_csv):
-    with open(phrases_output_csv, mode='w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ['Document', 'Phrase', 'Matched']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+# Initialize the output data
+annotation_data_list = []
+phrase_matches_list = []
 
 # Initialize a set to track unique annotations based on page number, marked text, and coordinates
 added_annotations = set()
@@ -85,10 +76,13 @@ def create_annotation_data(rectangles, page_num, phrase, link, user=user_email):
     # If the annotation has not been added before, add it to the set and return the annotation data
     if annotation_key not in added_annotations:
         added_annotations.add(annotation_key)
-        return json.dumps(annotation_data).replace('"', '\\"')
+        return annotation_data
     
     # If the annotation is a duplicate, return None
     return None
+
+# Read CSV using pandas (this will handle large CSV fields)
+df = pd.read_csv(input_file, delimiter=input_delimiter)
 
 # Process each PDF in the directory
 for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
@@ -99,66 +93,71 @@ for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
         all_annotations = []
         phrase_matches = []
 
-        with open(input_file, newline='', encoding='utf-8') as file:
-            reader = list(csv.DictReader(file, delimiter=input_delimiter))
+        for _, row in tqdm(df.iterrows(), desc=f"Processing phrases in {pdf_file}", total=df.shape[0]):
+            phrase = row['Reference']
+            link = row['Link']
+            matched = False
 
-            for row in tqdm(reader, desc=f"Processing phrases in {pdf_file}"):
-                phrase = row['Reference']
-                link = row['Link']
-                matched = False
+            # Search for exact matches
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                instances = page.search_for(phrase)
 
-                # Search for exact matches
+                if instances:
+                    matched = True
+                    for inst in instances:
+                        rect = fitz.Rect(inst)
+                        annotation_data = create_annotation_data(rect, page_num, phrase, link)
+
+                        if annotation_data:  # Only add if it's not a duplicate
+                            all_annotations.append(annotation_data)
+
+            # Flexible regex-based matching
+            if not matched:
+                flexible_pattern = re.escape(phrase).replace(r'\-', r'\-\s*').replace(r'\,', r'\,\s*')
+
                 for page_num in range(len(doc)):
                     page = doc.load_page(page_num)
-                    instances = page.search_for(phrase)
+                    page_text = page.get_text("text")
 
-                    if instances:
+                    for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
                         matched = True
-                        for inst in instances:
-                            rect = fitz.Rect(inst)
-                            annotation_data = create_annotation_data(rect, page_num, phrase, link)
+                        start, end = match.span()
+                        match_text = page_text[start:end]
+                        lines = match_text.splitlines()
 
-                            if annotation_data:  # Only add if it's not a duplicate
-                                all_annotations.append(annotation_data)
+                        for line in lines:
+                            quads = page.search_for(line)
+                            for quad in quads:
+                                rect = fitz.Rect(quad)
+                                annotation_data = create_annotation_data(rect, page_num, phrase, link)
 
-                # Flexible regex-based matching
-                if not matched:
-                    flexible_pattern = re.escape(phrase).replace(r'\-', r'\-\s*').replace(r'\,', r'\,\s*')
+                                if annotation_data:  # Only add if it's not a duplicate
+                                    all_annotations.append(annotation_data)
 
-                    for page_num in range(len(doc)):
-                        page = doc.load_page(page_num)
-                        page_text = page.get_text("text")
+            # Log phrase matches
+            phrase_matches.append({'Document': pdf_file, 'Phrase': phrase, 'Matched': 'Yes' if matched else 'No'})
 
-                        for match in re.finditer(flexible_pattern, page_text, re.IGNORECASE):
-                            matched = True
-                            start, end = match.span()
-                            match_text = page_text[start:end]
-                            lines = match_text.splitlines()
-
-                            for line in lines:
-                                quads = page.search_for(line)
-                                for quad in quads:
-                                    rect = fitz.Rect(quad)
-                                    annotation_data = create_annotation_data(rect, page_num, phrase, link)
-
-                                    if annotation_data:  # Only add if it's not a duplicate
-                                        all_annotations.append(annotation_data)
-
-                # Log phrase matches
-                phrase_matches.append({'Document': pdf_file, 'Phrase': phrase, 'Matched': 'Yes' if matched else 'No'})
-
-        # Save annotations to output
+        # Save annotations to output using pandas
         if all_annotations:
-            combined_annotations = "\\u0013".join(all_annotations)
+            combined_annotations = "\\u0013".join([json.dumps(annotation).replace('"', '\\"') for annotation in all_annotations])
             annotation_json = f"{{\"Highlights\":\"{combined_annotations}\"}}"
 
-            with open(annotation_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=['Bates/Control #', 'Annotation Data'])
-                writer.writerow({'Bates/Control #': pdf_file, 'Annotation Data': annotation_json})
+            annotation_data_list.append({
+                'Bates/Control #': pdf_file,
+                'Annotation Data': annotation_json
+            })
 
-        # Save phrase matches
-        with open(phrases_output_csv, mode='a', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=['Document', 'Phrase', 'Matched'])
-            writer.writerows(phrase_matches)
+        # Save phrase matches using pandas
+        for match in phrase_matches:
+            phrase_matches_list.append(match)
 
         doc.close()
+
+# Write the data to CSV files using pandas
+annotation_df = pd.DataFrame(annotation_data_list)
+phrase_matches_df = pd.DataFrame(phrase_matches_list)
+
+# Write the DataFrames to CSV
+annotation_df.to_csv(annotation_output_csv, index=False, encoding='utf-8')
+phrase_matches_df.to_csv(phrases_output_csv, index=False, encoding='utf-8')
