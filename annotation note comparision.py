@@ -3,6 +3,9 @@ import re
 import json
 import pandas as pd
 
+# Because I am forgetfull here is the regex that can be used to filter nots for bates numbers
+# (?:[A-Z]{3}\.[0-9]{3}\.[0-9]{3}\.[0-9]{4}|[A-Z]{3}\.[A-Z]{3}\.[0-9]{3}\.[0-9]{4})
+
 def parse_annotation_data(annotation_str, user_filter=None, note_regex=None):
     """
     Get a list of highlights from the annotation JSON string.
