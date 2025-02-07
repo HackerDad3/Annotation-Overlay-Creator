@@ -6,7 +6,7 @@ def parse_annotation_data(annotation_str, user_filter=None):
     """
     Get a list of highlights from the annotation JSON string.
     If "Highlights" is a string, split it by '\u0013'.
-    If user_filter is given (a list of usernames), only return highlights whose "user" is in that list.
+    If a user_filter (list of usernames) is given, only return highlights whose "user" is in that list.
     """
     try:
         annotation = json.loads(annotation_str)
@@ -31,7 +31,6 @@ def parse_annotation_data(annotation_str, user_filter=None):
             highlights = hl_data
 
     if user_filter is not None:
-        # Filter highlights by user if a filter is set
         if isinstance(user_filter, list):
             highlights = [hl for hl in highlights if hl.get("user") in user_filter]
         else:
@@ -42,9 +41,9 @@ def canonicalize_highlight(hl):
     """
     Create a simple JSON string for the highlight using:
       - Rectangles (x, y, width, height) from "rectangles" or "rectangle"
-      - Highlighted text from "text"
+      - Marked text from "markedText"
       - Notes text from "notes"
-      - Page number from "pageNum"
+      - Page number from "pageNum" (if not found at top level, try inside "rectangles")
     Sorting is applied so order doesn't matter.
     """
     rects = []
@@ -76,22 +75,26 @@ def canonicalize_highlight(hl):
                     rects.append({"x": x, "y": y, "width": width, "height": height})
     rects_sorted = sorted(rects, key=lambda r: (r.get("x", 0), r.get("y", 0), r.get("width", 0), r.get("height", 0)))
     
-    text = hl.get("text", "").strip()
+    marked_text = hl.get("markedText", "")
+    if marked_text is None:
+        marked_text = ""
+    else:
+        marked_text = str(marked_text).strip()
     
     notes = []
-    notes_list = hl.get("notes")
-    if notes_list and isinstance(notes_list, list):
-        for note in notes_list:
-            if isinstance(note, dict):
-                note_text = note.get("text", "").strip()
-                notes.append(note_text)
+    notes_list = hl.get("notes", [])
+    if isinstance(notes_list, list):
+        notes = [str(note.get("text", "")).strip() for note in notes_list if isinstance(note, dict)]
     notes_sorted = sorted(notes)
     
     page_num = hl.get("pageNum")
+    # If pageNum is not at top-level, check inside "rectangles"
+    if page_num is None and "rectangles" in hl and isinstance(hl["rectangles"], dict):
+        page_num = hl["rectangles"].get("pageNum")
     
     canon = {
         "rects": rects_sorted,
-        "text": text,
+        "markedText": marked_text,
         "notes": notes_sorted,
         "pageNum": page_num
     }
@@ -99,7 +102,7 @@ def canonicalize_highlight(hl):
 
 def match_highlights(master_list, csv2_list):
     """
-    Compare two lists (each a list of (canonical, original) tuples) for one row.
+    Compare two lists (each a list of (canonical, original) tuples) for a row.
     Return two lists:
       - missing: items in master_list not found in csv2_list
       - extra: items in csv2_list not found in master_list
@@ -152,8 +155,72 @@ def update_annotation_data(original_annotation, missing_highlights, delimiter='\
             ann_obj["Highlights"] = new_highlights
     return json.dumps(ann_obj, ensure_ascii=False)
 
+def get_readable_fields(hl):
+    """
+    Return a dict with just the fields for the report:
+      - Page Number (from pageNum, plus 1 for human readability),
+      - Highlighted Text (from markedText),
+      - Notes,
+      - Username.
+    If pageNum is not at the top level, try checking inside "rectangles".
+    """
+    page = hl.get("pageNum")
+    if page is None and "rectangles" in hl and isinstance(hl["rectangles"], dict):
+        page = hl["rectangles"].get("pageNum")
+    if page is None:
+        page_val = ""
+    else:
+        try:
+            page_val = int(page) + 1
+        except (ValueError, TypeError):
+            page_val = page
+
+    marked_text = hl.get("markedText", "")
+    if marked_text is None:
+        marked_text = ""
+    else:
+        marked_text = str(marked_text).strip()
+    
+    notes_list = hl.get("notes", [])
+    notes = ""
+    if isinstance(notes_list, list):
+        notes = ", ".join(str(note.get("text", "")).strip() for note in notes_list if isinstance(note, dict))
+    user = hl.get("user", "")
+    return {
+        "Page Number": page_val,
+        "Highlighted Text": marked_text,
+        "Notes": notes,
+        "Username": user
+    }
+
+def read_key_file(key_filepath):
+    """
+    Read the key CSV file (the edited differences report) and build a dictionary
+    mapping each identifier to a list of annotation JSON strings to add.
+    The key CSV is expected to have at least two columns: "Identifier" and "Annotation".
+    """
+    try:
+        df_key = pd.read_csv(key_filepath, encoding='utf-8')
+    except Exception as e:
+        print("Error reading key file:", e)
+        return {}
+    
+    key_dict = {}
+    # Iterate through the key file rows.
+    for index, row in df_key.iterrows():
+        ident = row.get("Identifier")
+        annotation = row.get("Annotation")
+        if pd.notna(ident) and pd.notna(annotation):
+            # Ensure annotation is a string.
+            annotation_str = str(annotation)
+            if ident in key_dict:
+                key_dict[ident].append(annotation_str)
+            else:
+                key_dict[ident] = [annotation_str]
+    return key_dict
+
 def main():
-    # Get file paths for master (CSV1) and CSV2
+    # Get file paths for master (CSV1) and CSV2.
     master_csv = input("Enter the file path for the master (CSV1) annotations CSV: ").strip().strip('"')
     master_csv = os.path.normpath(master_csv)
     csv2_path = input("Enter the file path for CSV2 annotations CSV: ").strip().strip('"')
@@ -178,7 +245,7 @@ def main():
         print("One or both CSV files are missing the 'Annotation Data' column.")
         return
     
-    # Use "Bates/Control #" as the identifier if available; otherwise, use row index.
+    # Use "Bates/Control #" as identifier if available; otherwise, use row index.
     id_col = "Bates/Control #"
     if id_col not in df_master.columns or id_col not in df_csv2.columns:
         print(f"Identifier column '{id_col}' not found. Using row index.")
@@ -211,49 +278,52 @@ def main():
             hl_list.append((canon, hl))
         csv2_dict[identifier] = hl_list
 
-    # Compare filtered highlights and build a differences report.
+    # Compare the filtered highlights between CSV1 and CSV2.
     diff_results = []
-    fix_missing = {}  # Store missing highlights (from master) that need to be added to CSV2.
+    fix_missing = {}  # Store missing highlights (from master) to add to CSV2.
     
     for identifier, master_hl_list in master_dict.items():
         if identifier not in csv2_dict:
-            combined_master = "\n".join(json.dumps(hl, ensure_ascii=False) for (_, hl) in master_hl_list)
-            diff_results.append({
-                "Identifier": identifier,
-                "Issue": "Row missing in CSV2",
-                "Master Annotation JSON": combined_master,
-                "CSV2 Annotation JSON": ""
-            })
+            for (canon, orig) in master_hl_list:
+                details = get_readable_fields(orig)
+                # Also add the full JSON of the missing highlight as "Annotation"
+                details["Annotation"] = json.dumps(orig, ensure_ascii=False)
+                diff_results.append({
+                    "Identifier": identifier,
+                    "Issue": "Row missing in CSV2",
+                    **details
+                })
         else:
             csv2_hl_list = csv2_dict[identifier]
             missing, extra = match_highlights(master_hl_list, csv2_hl_list)
             if missing:
-                fix_missing[identifier] = [orig for (canon, orig) in missing]
+                fix_missing[identifier] = [json.dumps(orig, ensure_ascii=False) for (canon, orig) in missing]
             for (canon, orig) in missing:
+                details = get_readable_fields(orig)
+                details["Annotation"] = json.dumps(orig, ensure_ascii=False)
                 diff_results.append({
                     "Identifier": identifier,
                     "Issue": "Missing (in CSV2)",
-                    "Master Annotation JSON": json.dumps(orig, ensure_ascii=False),
-                    "CSV2 Annotation JSON": ""
+                    **details
                 })
             for (canon, orig) in extra:
+                details = get_readable_fields(orig)
                 diff_results.append({
                     "Identifier": identifier,
                     "Issue": "Extra (in CSV2)",
-                    "Master Annotation JSON": "",
-                    "CSV2 Annotation JSON": json.dumps(orig, ensure_ascii=False)
+                    **details
                 })
     for identifier in csv2_dict:
         if identifier not in master_dict:
-            combined_csv2 = "\n".join(json.dumps(hl, ensure_ascii=False) for (_, hl) in csv2_dict[identifier])
-            diff_results.append({
-                "Identifier": identifier,
-                "Issue": "Extra row in CSV2",
-                "Master Annotation JSON": "",
-                "CSV2 Annotation JSON": combined_csv2
-            })
+            for (canon, hl) in csv2_dict[identifier]:
+                details = get_readable_fields(hl)
+                diff_results.append({
+                    "Identifier": identifier,
+                    "Issue": "Extra row in CSV2",
+                    **details
+                })
     
-    # Write the differences report.
+    # Write out the differences report.
     if diff_results:
         diff_df = pd.DataFrame(diff_results)
         report_filepath = os.path.join(os.path.dirname(master_csv), "AnnotationDiffReport.csv")
@@ -262,8 +332,19 @@ def main():
     else:
         print("No differences found.")
     
+    # Ask if the user wants to supply an edited key file.
+    key_choice = input("Do you want to use an edited key file for corrections? (y/n): ").strip().lower()
+    if key_choice == 'y':
+        key_filepath = input("Enter the file path for the key CSV file: ").strip().strip('"')
+        key_filepath = os.path.normpath(key_filepath)
+        key_dict = read_key_file(key_filepath)
+        # Override fix_missing with data from key_dict.
+        fix_missing = key_dict
+        print("Using key file for corrections.")
+    else:
+        print("Using all missing highlights for corrections.")
+    
     # Ask if the user wants to fix CSV2.
-    # When fixing, use the original (unfiltered) CSV2 data.
     if diff_results:
         fix_choice = input("Do you want to fix the differences in CSV2? (y/n): ").strip().lower()
         if fix_choice == 'y':
@@ -272,7 +353,9 @@ def main():
                 row_id = row[id_col] if id_col else idx
                 if row_id in fix_missing:
                     original_annotation = row["Annotation Data"]
-                    updated_annotation = update_annotation_data(original_annotation, fix_missing[row_id])
+                    # fix_missing[row_id] is a list of JSON strings
+                    missing_highlights = [json.loads(a) for a in fix_missing[row_id]]
+                    updated_annotation = update_annotation_data(original_annotation, missing_highlights)
                     df_csv2_fixed.at[idx, "Annotation Data"] = updated_annotation
             fix_filepath = os.path.join(os.path.dirname(csv2_path), "CSV2_Fixed.csv")
             df_csv2_fixed.to_csv(fix_filepath, index=False, encoding='utf-8')
