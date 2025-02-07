@@ -1,12 +1,18 @@
 import os
+import re
 import json
 import pandas as pd
 
-def parse_annotation_data(annotation_str, user_filter=None):
+
+# regex pattern to find bates numbers like CIV.001.001.0001, LAY.ASH.001.0001 including if there is a suffix of _0001  (?:[A-Z]{3}\.[0-9]{3}\.[0-9]{3}\.[0-9]{4}|[A-Z]{3}\.[A-Z]{3}\.[0-9]{3}\.[0-9]{4})
+
+
+def parse_annotation_data(annotation_str, user_filter=None, note_regex=None):
     """
     Get a list of highlights from the annotation JSON string.
     If "Highlights" is a string, split it by '\u0013'.
     If a user_filter (list of usernames) is given, only return highlights whose "user" is in that list.
+    If note_regex is provided, only return highlights where at least one note's text matches the regex.
     """
     try:
         annotation = json.loads(annotation_str)
@@ -35,6 +41,12 @@ def parse_annotation_data(annotation_str, user_filter=None):
             highlights = [hl for hl in highlights if hl.get("user") in user_filter]
         else:
             highlights = [hl for hl in highlights if hl.get("user") == user_filter]
+
+    if note_regex is not None:
+        pattern = re.compile(note_regex)
+        # Only keep highlights that have at least one note with text matching the regex.
+        highlights = [hl for hl in highlights if any(pattern.search(str(note.get("text", ""))) for note in hl.get("notes", []) if isinstance(note, dict))]
+    
     return highlights
 
 def canonicalize_highlight(hl):
@@ -88,7 +100,6 @@ def canonicalize_highlight(hl):
     notes_sorted = sorted(notes)
     
     page_num = hl.get("pageNum")
-    # If pageNum is not at top-level, check inside "rectangles"
     if page_num is None and "rectangles" in hl and isinstance(hl["rectangles"], dict):
         page_num = hl["rectangles"].get("pageNum")
     
@@ -206,12 +217,10 @@ def read_key_file(key_filepath):
         return {}
     
     key_dict = {}
-    # Iterate through the key file rows.
     for index, row in df_key.iterrows():
         ident = row.get("Identifier")
         annotation = row.get("Annotation")
         if pd.notna(ident) and pd.notna(annotation):
-            # Ensure annotation is a string.
             annotation_str = str(annotation)
             if ident in key_dict:
                 key_dict[ident].append(annotation_str)
@@ -233,7 +242,14 @@ def main():
         username_filter = [u.strip() for u in username_input.split(",") if u.strip()]
     else:
         username_filter = None
-    
+
+    # Ask if we want to filter on note pattern. If yes, get a regex.
+    note_filter_choice = input("Do you want to filter on note pattern? (y/n): ").strip().lower()
+    if note_filter_choice == 'y':
+        note_regex = input("Enter the regex pattern for notes: ").strip()
+    else:
+        note_regex = None
+
     try:
         df_master = pd.read_csv(master_csv, encoding='utf-8')
         df_csv2 = pd.read_csv(csv2_path, encoding='utf-8')
@@ -258,7 +274,7 @@ def main():
         ann_str = row.get("Annotation Data")
         highlights = []
         if pd.notna(ann_str):
-            highlights = parse_annotation_data(ann_str, user_filter=username_filter)
+            highlights = parse_annotation_data(ann_str, user_filter=username_filter, note_regex=note_regex)
         hl_list = []
         for hl in highlights:
             canon = canonicalize_highlight(hl)
@@ -271,7 +287,7 @@ def main():
         ann_str = row.get("Annotation Data")
         highlights = []
         if pd.notna(ann_str):
-            highlights = parse_annotation_data(ann_str, user_filter=username_filter)
+            highlights = parse_annotation_data(ann_str, user_filter=username_filter, note_regex=note_regex)
         hl_list = []
         for hl in highlights:
             canon = canonicalize_highlight(hl)
@@ -286,7 +302,6 @@ def main():
         if identifier not in csv2_dict:
             for (canon, orig) in master_hl_list:
                 details = get_readable_fields(orig)
-                # Also add the full JSON of the missing highlight as "Annotation"
                 details["Annotation"] = json.dumps(orig, ensure_ascii=False)
                 diff_results.append({
                     "Identifier": identifier,
@@ -338,7 +353,6 @@ def main():
         key_filepath = input("Enter the file path for the key CSV file: ").strip().strip('"')
         key_filepath = os.path.normpath(key_filepath)
         key_dict = read_key_file(key_filepath)
-        # Override fix_missing with data from key_dict.
         fix_missing = key_dict
         print("Using key file for corrections.")
     else:
@@ -353,7 +367,6 @@ def main():
                 row_id = row[id_col] if id_col else idx
                 if row_id in fix_missing:
                     original_annotation = row["Annotation Data"]
-                    # fix_missing[row_id] is a list of JSON strings
                     missing_highlights = [json.loads(a) for a in fix_missing[row_id]]
                     updated_annotation = update_annotation_data(original_annotation, missing_highlights)
                     df_csv2_fixed.at[idx, "Annotation Data"] = updated_annotation
