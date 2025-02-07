@@ -3,10 +3,6 @@ import re
 import json
 import pandas as pd
 
-
-# regex pattern to find bates numbers like CIV.001.001.0001, LAY.ASH.001.0001 including if there is a suffix of _0001  (?:[A-Z]{3}\.[0-9]{3}\.[0-9]{3}\.[0-9]{4}|[A-Z]{3}\.[A-Z]{3}\.[0-9]{3}\.[0-9]{4})
-
-
 def parse_annotation_data(annotation_str, user_filter=None, note_regex=None):
     """
     Get a list of highlights from the annotation JSON string.
@@ -44,7 +40,6 @@ def parse_annotation_data(annotation_str, user_filter=None, note_regex=None):
 
     if note_regex is not None:
         pattern = re.compile(note_regex)
-        # Only keep highlights that have at least one note with text matching the regex.
         highlights = [hl for hl in highlights if any(pattern.search(str(note.get("text", ""))) for note in hl.get("notes", []) if isinstance(note, dict))]
     
     return highlights
@@ -310,7 +305,7 @@ def main():
                 })
         else:
             csv2_hl_list = csv2_dict[identifier]
-            missing, extra = match_highlights(master_hl_list, csv2_hl_list)
+            missing, _ = match_highlights(master_hl_list, csv2_hl_list)
             if missing:
                 fix_missing[identifier] = [json.dumps(orig, ensure_ascii=False) for (canon, orig) in missing]
             for (canon, orig) in missing:
@@ -321,22 +316,7 @@ def main():
                     "Issue": "Missing (in CSV2)",
                     **details
                 })
-            for (canon, orig) in extra:
-                details = get_readable_fields(orig)
-                diff_results.append({
-                    "Identifier": identifier,
-                    "Issue": "Extra (in CSV2)",
-                    **details
-                })
-    for identifier in csv2_dict:
-        if identifier not in master_dict:
-            for (canon, hl) in csv2_dict[identifier]:
-                details = get_readable_fields(hl)
-                diff_results.append({
-                    "Identifier": identifier,
-                    "Issue": "Extra row in CSV2",
-                    **details
-                })
+    # We ignore extra items in CSV2.
     
     # Write out the differences report.
     if diff_results:
