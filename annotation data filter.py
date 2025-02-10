@@ -4,10 +4,8 @@ import pandas as pd
 import time
 
 # Input file path
-# input_file = r"C:\Users\Willi\Downloads\20241115T1029_UTC8_NRTIJV_Reports_Backup - Copy.csv"
 csv_file = input("Paste CSV filepath: ").strip().strip('"')
 input_file = os.path.normpath(csv_file)
-
 
 # Create the output file path
 base_name = os.path.splitext(os.path.basename(input_file))[0]
@@ -39,6 +37,7 @@ if choice in ('1', '3'):
 # Step 3: If filtering by page range, get the range and choice to include/exclude
 if choice in ('2', '3'):
     filter_page_range = True
+    # Subtracting 1 to work with zero-indexed page numbers (assumes JSON pageNum is zero-indexed)
     start_page = int(input("Enter the start page number: ")) - 1
     end_page = int(input("Enter the end page number: ")) - 1
     print("Do you want to include or exclude this page range?")
@@ -46,6 +45,13 @@ if choice in ('2', '3'):
     print("2: Exclude")
     page_filter_choice = input("Enter your choice (1 or 2): ").strip()
     include_page_range = page_filter_choice == '1'
+    
+    # Additional option for resetting page numbering within the filtered range
+    print("Do you want to reset the page numbering for the filtered pages?")
+    print("1: Do not reset (keep original page numbers)")
+    print("2: Reset numbering to start at 0")
+    print("3: Reset numbering to start at the beginning of the range (as entered)")
+    page_reset_choice = input("Enter your choice (1, 2, or 3): ").strip()
 
 # Step 4: Ask if the user wants to deduplicate text within the notes
 print("Do you want to deduplicate text within the notes? (y/n)")
@@ -64,7 +70,7 @@ if 'Annotation Data' not in df.columns:
 
 # Function to deduplicate text within notes
 def deduplicate_note_text(note_text):
-    """ Deduplicate lines within the text, separated by <br>. """
+    """Deduplicate lines within the text, separated by <br>."""
     note_text = note_text.replace('<br><br>', '<br>').strip()
     has_p_tags = note_text.startswith('<p>') and note_text.endswith('</p>')
     if has_p_tags:
@@ -76,7 +82,7 @@ def deduplicate_note_text(note_text):
 
 # Function to update timestamps
 def update_datetime_to_current(data):
-    """ Update 'created' and 'updated' timestamps to current datetime in milliseconds. """
+    """Update 'created' and 'updated' timestamps to current datetime in milliseconds."""
     current_timestamp = int(time.time() * 1000)
 
     # Update top-level 'created' and 'updated' fields
@@ -126,6 +132,21 @@ for index, row in df.iterrows():
                             include_highlight &= page_in_range
                         else:
                             include_highlight &= not page_in_range
+
+                    # If the highlight is included and it has a page number,
+                    # update the page numbering if the reset option was chosen.
+                    if filter_page_range and include_highlight:
+                        # Ensure we have a page number to work with
+                        page_num = highlight_json.get('rectangles', {}).get('pageNum')
+                        if page_num is not None:
+                            if page_reset_choice == '2':
+                                # Option 2: Reset numbering so that the first page in range becomes 0.
+                                highlight_json['rectangles']['pageNum'] = page_num - start_page
+                            elif page_reset_choice == '3':
+                                # Option 3: Reset numbering so that the first page in range becomes what was entered.
+                                # Since start_page was set to (entered start page - 1), this transformation makes:
+                                #   if page_num == start_page then new value = (start_page - start_page) + (start_page+1) = start_page+1.
+                                highlight_json['rectangles']['pageNum'] = page_num - start_page + (start_page + 1)
 
                     # Deduplicate text within the notes
                     if deduplicate_notes and 'notes' in highlight_json:
