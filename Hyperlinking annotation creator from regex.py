@@ -4,10 +4,10 @@ import json
 import re
 import zipfile
 import io
+import os  # Missing import for os
 from time import time
 from tqdm import tqdm
 import datetime
-import os
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
@@ -81,8 +81,16 @@ with zipfile.ZipFile(zip_file, 'r') as zip_ref:
         with zip_ref.open(pdf_file) as file:
             file_data = file.read()
 
+            # Use io.BytesIO to create a file-like object from file_data
+            pdf_bytes = io.BytesIO(file_data)
+
             # Open the PDF from memory using PyMuPDF (fitz)
-            doc = fitz.open(io.BytesIO(file_data))
+            try:
+                doc = fitz.open(pdf_bytes)
+            except Exception as e:
+                print(f"Error processing {pdf_file}: {e}")
+                continue  # Skip this file and move to the next one
+
             new_annotations = []
 
             # Iterate over each row in the existing annotation CSV
