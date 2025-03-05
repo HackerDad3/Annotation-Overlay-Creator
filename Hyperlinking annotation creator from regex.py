@@ -2,10 +2,12 @@ import fitz  # PyMuPDF
 import pandas as pd  # Import pandas for CSV processing
 import json
 import re
+import zipfile
+import io
 from time import time
-import os
 from tqdm import tqdm
 import datetime
+import os
 
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
@@ -14,11 +16,11 @@ document_number = input("Main Document number: ")
 
 # File paths
 input_csv_file = input("Paste existing CSV file path with annotation data: ").strip().strip('"')
-pdf_directory = input("Paste directory containing PDF files: ").strip().strip('"')
+zip_file_path = input("Paste ZIP file path containing PDF files: ").strip().strip('"')
 
 # Normalize paths
 input_file = os.path.normpath(input_csv_file)
-pdf_dir = os.path.normpath(pdf_directory)
+zip_file = os.path.normpath(zip_file_path)
 
 # Output directory (same as input CSV file's directory)
 output_dir = os.path.dirname(input_file)
@@ -69,44 +71,48 @@ def create_annotation_data(rectangles, page_num, phrase, user=user_email):
     }
     return annotation_data
 
-# Process each PDF in the directory
-for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs"):
-    if pdf_file.endswith('.pdf'):
-        pdf_path = os.path.join(pdf_dir, pdf_file)
+# Open the zip file and process PDFs without extracting them
+with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+    # List all PDF files in the zip file (including files in subdirectories)
+    pdf_files = [f for f in zip_ref.namelist() if f.endswith('.pdf')]
 
-        doc = fitz.open(pdf_path)
-        new_annotations = []
+    for pdf_file in tqdm(pdf_files, desc="Processing PDFs"):
+        # Read the PDF file from the zip archive into memory
+        with zip_ref.open(pdf_file) as file:
+            file_data = file.read()
 
-        # Iterate over each row in the existing annotation CSV
-        for _, row in tqdm(existing_annotations.iterrows(), desc=f"Processing annotations in {pdf_file}", total=existing_annotations.shape[0]):
-            phrase = row['Marked Text']
-            matched = False
+            # Open the PDF from memory using PyMuPDF (fitz)
+            doc = fitz.open(io.BytesIO(file_data))
+            new_annotations = []
 
-            # Search for regex matches in the PDF
-            for page_num in range(len(doc)):
-                page = doc.load_page(page_num)
-                page_text = page.get_text("text")
+            # Iterate over each row in the existing annotation CSV
+            for _, row in tqdm(existing_annotations.iterrows(), desc=f"Processing annotations in {pdf_file}", total=existing_annotations.shape[0]):
+                phrase = row['Marked Text']
+                matched = False
 
-                for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
-                    matched = True
-                    start, end = match.span()
-                    match_text = page_text[start:end]
-                    lines = match_text.splitlines()
+                # Search for regex matches in the PDF
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    page_text = page.get_text("text")
 
-                    # For each matched line, generate an annotation
-                    for line in lines:
-                        quads = page.search_for(line)
-                        for quad in quads:
-                            rect = fitz.Rect(quad)
-                            annotation_data = create_annotation_data(rect, page_num, match.group())
+                    for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
+                        matched = True
+                        start, end = match.span()
+                        match_text = page_text[start:end]
+                        lines = match_text.splitlines()
 
-                            # Append the new annotation
-                            new_annotations.append(annotation_data)
+                        # For each matched line, generate an annotation
+                        for line in lines:
+                            quads = page.search_for(line)
+                            for quad in quads:
+                                rect = fitz.Rect(quad)
+                                annotation_data = create_annotation_data(rect, page_num, match.group())
 
-        # Add new annotations to the existing annotations list
-        annotation_data_list.extend(new_annotations)
+                                # Append the new annotation
+                                new_annotations.append(annotation_data)
 
-        doc.close()
+            # Add new annotations to the existing annotations list
+            annotation_data_list.extend(new_annotations)
 
 # Append newly created annotation data to the existing CSV
 for annotation in annotation_data_list:
