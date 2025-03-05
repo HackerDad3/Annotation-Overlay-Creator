@@ -3,7 +3,6 @@ import pandas as pd  # Import pandas for CSV processing
 import json
 import re
 import zipfile
-import io
 import os  # Missing import for os
 from time import time
 from tqdm import tqdm
@@ -77,19 +76,11 @@ with zipfile.ZipFile(zip_file, 'r') as zip_ref:
     pdf_files = [f for f in zip_ref.namelist() if f.endswith('.pdf')]
 
     for pdf_file in tqdm(pdf_files, desc="Processing PDFs"):
-        # Read the PDF file from the zip archive into memory
-        with zip_ref.open(pdf_file) as file:
-            file_data = file.read()
-
-            # Use io.BytesIO to create a file-like object from file_data
-            pdf_bytes = io.BytesIO(file_data)
-
-            # Open the PDF from memory using PyMuPDF (fitz)
-            try:
-                doc = fitz.open(pdf_bytes)
-            except Exception as e:
-                print(f"Error processing {pdf_file}: {e}")
-                continue  # Skip this file and move to the next one
+        try:
+            # Open the PDF directly from the zip file without extracting it
+            with zip_ref.open(pdf_file) as file:
+                # Pass the file-like object directly to fitz
+                doc = fitz.open(file)
 
             new_annotations = []
 
@@ -121,6 +112,10 @@ with zipfile.ZipFile(zip_file, 'r') as zip_ref:
 
             # Add new annotations to the existing annotations list
             annotation_data_list.extend(new_annotations)
+
+        except Exception as e:
+            print(f"Error processing {pdf_file}: {e}")
+            continue  # Skip this file and move to the next one
 
 # Append newly created annotation data to the existing CSV
 for annotation in annotation_data_list:
