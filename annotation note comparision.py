@@ -3,9 +3,6 @@ import re
 import json
 import pandas as pd
 
-# Because I am forgetfull here is the regex that can be used to filter nots for bates numbers
-# (?:[A-Z]{3}\.[0-9]{3}\.[0-9]{3}\.[0-9]{4}|[A-Z]{3}\.[A-Z]{3}\.[0-9]{3}\.[0-9]{4})
-
 def parse_annotation_data(annotation_str, user_filter=None, note_regex=None):
     """
     Get a list of highlights from the annotation JSON string.
@@ -86,6 +83,9 @@ def canonicalize_highlight(hl):
     rects_sorted = sorted(rects, key=lambda r: (r.get("x", 0), r.get("y", 0), r.get("width", 0), r.get("height", 0)))
     
     marked_text = hl.get("markedText", "")
+    if not marked_text:
+        # Try alternate key if "markedText" is not found.
+        marked_text = hl.get("markedtext", "")
     if marked_text is None:
         marked_text = ""
     else:
@@ -169,8 +169,8 @@ def get_readable_fields(hl):
     Return a dict with just the fields for the report:
       - Page Number (from pageNum, plus 1 for human readability),
       - Highlighted Text (from markedText),
-      - Notes,
-      - Username.
+      - Username,
+      - Notes.
     If pageNum is not at the top level, try checking inside "rectangles".
     """
     page = hl.get("pageNum")
@@ -185,21 +185,26 @@ def get_readable_fields(hl):
             page_val = page
 
     marked_text = hl.get("markedText", "")
+    if not marked_text:
+        marked_text = hl.get("markedtext", "")
     if marked_text is None:
         marked_text = ""
     else:
         marked_text = str(marked_text).strip()
     
+    # Use "N/A" if user key is missing.
+    user = hl.get("user", "N/A")
+    
     notes_list = hl.get("notes", [])
     notes = ""
     if isinstance(notes_list, list):
         notes = ", ".join(str(note.get("text", "")).strip() for note in notes_list if isinstance(note, dict))
-    user = hl.get("user", "")
+    
     return {
         "Page Number": page_val,
         "Highlighted Text": marked_text,
-        "Notes": notes,
-        "Username": user
+        "Username": user,
+        "Notes": notes
     }
 
 def read_key_file(key_filepath):
