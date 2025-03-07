@@ -47,7 +47,7 @@ for pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
     pdf_file = os.path.basename(pdf_path)
     doc = fitz.open(pdf_path)
     
-    # Inner progress bar for pages in the current PDF file
+    # Process each page in the current PDF file
     for page_num in tqdm(range(len(doc)), desc=f"Processing pages in {pdf_file}", unit="page", leave=False):
         page = doc.load_page(page_num)
         page_rect = page.rect
@@ -60,7 +60,8 @@ for pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         
         # Find all regex matches in the page text
         for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
-            found_text = match.group(0)
+            # Remove any newline characters and extra whitespace from matched text
+            found_text = re.sub(r'[\r\n]+', ' ', match.group(0)).strip()
             
             # Use search_for to get bounding boxes of found text
             for rect in page.search_for(found_text):
