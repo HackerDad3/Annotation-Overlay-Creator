@@ -7,7 +7,7 @@ import datetime
 # Define user_email at the top
 user_email = "trial.solutions@advancediscovery.io"
 
-# --- User Inputs ---
+# --- User Inputs for file paths ---
 existing_annotation_csv_file = input("Paste CSV file path of existing annotations: ").strip().strip('"')
 existing_annotation_csv_file = os.path.normpath(existing_annotation_csv_file)
 
@@ -18,6 +18,27 @@ regex_report_csv_file = os.path.normpath(regex_report_csv_file)
 parent_dir = os.path.dirname(existing_annotation_csv_file)
 date_prefix = datetime.datetime.now().strftime("%Y%m%d")
 output_csv_file = os.path.join(parent_dir, f"{date_prefix}_updated_annotation_output.csv")
+
+# --- User Input for which sections to include ---
+# Options: referenced in / referred to / transcript / all
+section_choice = input("Enter which sections to include (referenced in / referred to / transcript / all): ").strip().lower()
+
+if section_choice == "referred to":
+    header = "<b>Refers to:</b> <br> "
+    footer = ""
+elif section_choice == "referenced in":
+    header = "<b>Referenced In:</b> <br> "
+    footer = ""
+elif section_choice == "transcript":
+    header = "<b>Transcript:</b> <br> "
+    footer = ""
+elif section_choice == "all":
+    header = "<b>Refers to:</b> <br> "
+    footer = " <br><b>Referenced In:</b> <br><b>Transcript:</b> <br>"
+else:
+    # Default to all if invalid input
+    header = "<b>Refers to:</b> <br> "
+    footer = " <br><b>Referenced In:</b> <br><b>Transcript:</b> <br>"
 
 # --- Load existing annotation data ---
 # Expected CSV columns: "Bates/Control #" and "Annotation Data"
@@ -36,7 +57,7 @@ for index, row in existing_df.iterrows():
     existing_annotations[bates] = obj
 
 # --- Load the regex report CSV ---
-# Expected columns: "Bates/Control #", "Found Text", "Page" (Page is 1-based)
+# Expected CSV columns: "Bates/Control #", "Found Text", "Page" (Page is 1-based)
 report_df = pd.read_csv(regex_report_csv_file, delimiter=delimiter)
 
 # --- Aggregate new occurrences per Bates ---
@@ -51,10 +72,6 @@ for _, row in report_df.iterrows():
         agg_occurrences[bates] = []
     if occ not in agg_occurrences[bates]:
         agg_occurrences[bates].append(occ)
-
-# --- Define header and footer for AttyNotes text ---
-header = "<b>Refers to:</b> <br> "
-footer = " <br><b>Referenced In:</b> <br><b><b>Transcript:</b></b> <br>"
 
 # --- Create updated annotation data by merging new occurrences with existing AttyNotes ---
 updated_annotations = []  # list of dicts with keys: "Bates/Control #" and "Annotation Data"
