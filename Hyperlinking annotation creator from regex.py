@@ -50,7 +50,7 @@ STAMP_HEIGHT = 50
 annotation_data_list = []  # Final updated annotation data per Bates
 phrase_matches_list = []   # Report for each matched phrase
 
-# Set to avoid duplicate annotations (using tuple of page, text, and rectangle coordinates)
+# Set to avoid duplicate annotations within this run (using tuple of page, text, and rectangle coordinates)
 added_annotations = set()
 
 # -------------------------------
@@ -86,11 +86,30 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
         "unit": "point",
         "markedText": marked_text,
     }
+    # Using page number and bounding box for in-run deduplication.
     annotation_key = (page_num, marked_text, rect.x0, rect.y0, rect.width, rect.height)
     if annotation_key not in added_annotations:
         added_annotations.add(annotation_key)
         return annotation_data
     return None
+
+# -------------------------------
+# Helper Function: Get Deduplication Key
+# -------------------------------
+def get_dedup_key(annotation):
+    # Extract markedText and strip it.
+    marked_text = annotation.get("markedText", "").strip()
+    # Assume first note exists.
+    note_text = ""
+    if "notes" in annotation and annotation["notes"]:
+        note_text = annotation["notes"][0].get("text", "").strip()
+    # Get the rectangle details from the first rectangle in the list.
+    rect_data = annotation.get("rectangles", {}).get("rectangles", [{}])[0]
+    x = rect_data.get("x", 0)
+    y = rect_data.get("y", 0)
+    width = rect_data.get("width", 0)
+    height = rect_data.get("height", 0)
+    return (marked_text, note_text, x, y, width, height)
 
 # -------------------------------
 # Load Existing Annotation Data
@@ -132,13 +151,8 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         stamp_area = fitz.Rect(page_rect.x1 - STAMP_WIDTH, page_rect.y0, page_rect.x1, page_rect.y0 + STAMP_HEIGHT)
         page_text = page.get_text("text")
         
-        # Uncomment for debugging:
-        # print(f"Page {page_num} text:\n{page_text}\n")
-        
         for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
             found_text = match.group(0).strip()
-            # Uncomment for debugging:
-            # print(f"Found match: '{found_text}' on page {page_num}")
             for rect in page.search_for(found_text):
                 rect = fitz.Rect(rect)
                 intersection = rect & stamp_area
@@ -152,8 +166,6 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
                         'Found Text': found_text,
                         'Page': page_num
                     })
-                    # Uncomment for debugging:
-                    # print(f"Annotation created for '{found_text}' on page {page_num}")
     doc.close()
     
     # Merge new highlights with existing highlights for this Bates.
@@ -167,17 +179,17 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         existing_highlights = []
     
     if new_annotations:
-        # Deduplicate new highlights among themselves.
+        # Deduplicate new highlights among themselves using the specified keys.
         unique_new = []
         seen = set()
         for annot in new_annotations:
-            s = json.dumps(annot, sort_keys=True)
-            if s not in seen:
-                seen.add(s)
+            key = get_dedup_key(annot)
+            if key not in seen:
+                seen.add(key)
                 unique_new.append(annot)
-        # Deduplicate new highlights against existing ones.
-        orig_set = {json.dumps(a, sort_keys=True) for a in existing_highlights}
-        new_to_add = [annot for annot in unique_new if json.dumps(annot, sort_keys=True) not in orig_set]
+        # Deduplicate new highlights against the existing ones (existing data is master).
+        existing_keys = {get_dedup_key(a) for a in existing_highlights}
+        new_to_add = [annot for annot in unique_new if get_dedup_key(annot) not in existing_keys]
         combined_highlights = existing_highlights + new_to_add
         # Join the JSON strings using the Unicode Unit Separator (\u0013)
         combined_annotations_str = "\u0013".join([json.dumps(annot) for annot in combined_highlights])
