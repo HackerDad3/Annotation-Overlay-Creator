@@ -3,6 +3,7 @@ import os
 import json
 import re
 import datetime
+from tqdm import tqdm  # Progress bar library
 
 # Define user_email
 user_email = "trial.solutions@advancediscovery.io"
@@ -22,10 +23,6 @@ output_csv_file = os.path.join(parent_dir, f"{date_prefix}_updated_annotation_ou
 # --- User Input for which sections to include ---
 # Options: referenced in / referred to / transcript / all
 section_choice = input("Enter which sections to include (referenced in / referred to / transcript / all): ").strip().lower()
-
-# --- New option: How to handle AttyNotes when there is no data ---
-# Enter "B" to output a blank (empty) AttyNotes JSON or "N" to omit the AttyNotes key.
-attynotes_empty_option = input("If there is no referenced/referred data, should the AttyNotes be blank (B) or not included (N)? (B/N): ").strip().upper()
 
 # Set header/footer and key_mode based on user's choice.
 if section_choice == "referred to":
@@ -71,10 +68,6 @@ report_df["Document"] = report_df["Document"].apply(lambda x: os.path.splitext(s
 report_df = report_df[report_df["Document"].isin(existing_annotations.keys())]
 
 # --- Aggregate new occurrences ---
-# agg_ref_in: key = (bates, matched_text); value = list of occurrence strings
-#   Format: "[Matched Text] at ####" (for referenced in)
-# agg_refers: key = bates; value = list of occurrence strings
-#   Format: "[matched_text] at ####" (for referred to)
 agg_ref_in = {}
 agg_refers = {}
 
@@ -109,7 +102,7 @@ for _, row in report_df.iterrows():
 # --- Create updated annotation data by merging new occurrences with existing AttyNotes ---
 updated_annotations = []  # list of dicts with keys: "Bates/Control #" and "Annotation Data"
 
-for bates, existing_obj in existing_annotations.items():
+for bates, existing_obj in tqdm(existing_annotations.items(), desc="Updating annotations"):
     # Retrieve any existing AttyNotes from the JSON.
     old_atty = {}
     if "AttyNotes" in existing_obj:
@@ -171,46 +164,29 @@ for bates, existing_obj in existing_annotations.items():
         final_obj["AttyNotes"] = json.dumps(merged_atty)
     else:
         # No new occurrences.
-        # If there are already existing AttyNotes with content, keep them.
+        # If AttyNotes already exist but are blank, add header/footer titles.
         if "AttyNotes" in final_obj:
             try:
                 atty_obj = json.loads(final_obj["AttyNotes"])
             except Exception:
                 atty_obj = {}
-            if atty_obj and atty_obj.get("text", "").strip():
-                pass  # keep existing AttyNotes as is
-            else:
-                # No content in AttyNotes: apply user preference.
-                if attynotes_empty_option == "B":
-                    merged_atty = {
-                        "text": "",
-                        "created": int(datetime.datetime.now().timestamp() * 1000),
-                        "updated": None,
-                        "parentType": "Document",
-                        "parentId": 0,
-                        "id": 0,
-                        "user": user_email,
-                        "unit": "point"
-                    }
-                    final_obj["AttyNotes"] = json.dumps(merged_atty)
-                elif attynotes_empty_option == "N":
-                    final_obj.pop("AttyNotes", None)
+            if not atty_obj.get("text", "").strip():
+                atty_obj["text"] = header + footer
+                atty_obj["created"] = atty_obj.get("created", int(datetime.datetime.now().timestamp() * 1000))
+                final_obj["AttyNotes"] = json.dumps(atty_obj)
         else:
-            # No existing AttyNotes at all: use user option.
-            if attynotes_empty_option == "B":
-                merged_atty = {
-                    "text": "",
-                    "created": int(datetime.datetime.now().timestamp() * 1000),
-                    "updated": None,
-                    "parentType": "Document",
-                    "parentId": 0,
-                    "id": 0,
-                    "user": user_email,
-                    "unit": "point"
-                }
-                final_obj["AttyNotes"] = json.dumps(merged_atty)
-            elif attynotes_empty_option == "N":
-                pass
+            # No existing AttyNotes at all: create one with header/footer.
+            atty_obj = {
+                "text": header + footer,
+                "created": int(datetime.datetime.now().timestamp() * 1000),
+                "updated": None,
+                "parentType": "Document",
+                "parentId": 0,
+                "id": 0,
+                "user": user_email,
+                "unit": "point"
+            }
+            final_obj["AttyNotes"] = json.dumps(atty_obj)
 
     combined_json = json.dumps(final_obj)
 
@@ -228,7 +204,7 @@ for bates, existing_obj in existing_annotations.items():
             for key in keys:
                 matched_text = key[1]
                 occ_list = agg_ref_in.get(key, [])
-                note_text = header + " <br> ".join(occ_list) + footer if occ_list else ""
+                note_text = header + " <br> ".join(occ_list) + footer if occ_list else header + footer
                 atty_obj_new = {
                     "text": note_text,
                     "created": int(datetime.datetime.now().timestamp() * 1000),
@@ -261,7 +237,7 @@ for bates, existing_obj in existing_annotations.items():
             for key in keys:
                 matched_text = key[1]
                 occ_list = agg_ref_in.get(key, [])
-                note_text = header + " <br> ".join(occ_list) + footer if occ_list else ""
+                note_text = header + " <br> ".join(occ_list) + footer if occ_list else header + footer
                 atty_obj_new = {
                     "text": note_text,
                     "created": int(datetime.datetime.now().timestamp() * 1000),
