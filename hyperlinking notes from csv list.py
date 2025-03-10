@@ -23,9 +23,11 @@ output_csv_file = os.path.join(parent_dir, f"{date_prefix}_updated_annotation_ou
 # Options: referenced in / referred to / transcript / all
 section_choice = input("Enter which sections to include (referenced in / referred to / transcript / all): ").strip().lower()
 
+# --- New option: How to handle AttyNotes when there is no data ---
+# Enter "B" to output a blank (empty) AttyNotes JSON or "N" to omit the AttyNotes key.
+attynotes_empty_option = input("If there is no referenced/referred data, should the AttyNotes be blank (B) or not included (N)? (B/N): ").strip().upper()
+
 # Set header/footer and key_mode based on user's choice.
-# For "referenced in" or "transcript", the output rows’ key will be the Matched Text.
-# For "referred to", the key remains the Bates (document).
 if section_choice == "referred to":
     header = "<b>Refers to:</b> <br> "
     footer = ""
@@ -70,9 +72,9 @@ report_df = report_df[report_df["Document"].isin(existing_annotations.keys())]
 
 # --- Aggregate new occurrences ---
 # agg_ref_in: key = (bates, matched_text); value = list of occurrence strings
-#   Format: "[Matched Text] is referenced in [bates] on page ####"
+#   Format: "[Matched Text] at ####" (for referenced in)
 # agg_refers: key = bates; value = list of occurrence strings
-#   Format: "[bates] refers to [Matched Text] on page ####"
+#   Format: "[matched_text] at ####" (for referred to)
 agg_ref_in = {}
 agg_refers = {}
 
@@ -80,15 +82,13 @@ for _, row in report_df.iterrows():
     bates = str(row["Document"]).strip()
     matched = str(row["Matched Text"]).strip()
     page = int(row["Page"])
-    occ_ref_in = f"{matched} is referenced in {bates} on page {str(page).zfill(4)}"
-    occ_refers = f"{bates} refers to {matched} on page {str(page).zfill(4)}"
+    occ_ref_in = f"{bates} at {str(page).zfill(4)}"
+    occ_refers = f"{matched} at {str(page).zfill(4)}"
     key = (bates, matched)
-    if key not in agg_ref_in:
-        agg_ref_in[key] = []
+    agg_ref_in.setdefault(key, [])
     if occ_ref_in not in agg_ref_in[key]:
         agg_ref_in[key].append(occ_ref_in)
-    if bates not in agg_refers:
-        agg_refers[bates] = []
+    agg_refers.setdefault(bates, [])
     if occ_refers not in agg_refers[bates]:
         agg_refers[bates].append(occ_refers)
 
@@ -98,10 +98,9 @@ for _, row in report_df.iterrows():
     bates = str(row["Document"]).strip()
     matched = str(row["Matched Text"]).strip()
     page = int(row["Page"])
-    occ_ref_in = f"{matched} is referenced in {bates} on page {str(page).zfill(4)}"
-    occ_refers = f"{bates} refers to {matched} on page {str(page).zfill(4)}"
-    if bates not in agg_by_bates:
-        agg_by_bates[bates] = []
+    occ_ref_in = f"{bates} at {str(page).zfill(4)}"
+    occ_refers = f"{matched} at {str(page).zfill(4)}"
+    agg_by_bates.setdefault(bates, [])
     if occ_ref_in not in agg_by_bates[bates]:
         agg_by_bates[bates].append(occ_ref_in)
     if occ_refers not in agg_by_bates[bates]:
@@ -111,23 +110,6 @@ for _, row in report_df.iterrows():
 updated_annotations = []  # list of dicts with keys: "Bates/Control #" and "Annotation Data"
 
 for bates, existing_obj in existing_annotations.items():
-    # Only update if there are new occurrences for this Bates.
-    if bates not in agg_by_bates:
-        continue
-    # For merging new occurrences:
-    if section_choice in ["referenced in", "transcript"]:
-        # Use all new occurrences for this Bates from agg_by_bates (which contains both formats)
-        new_occurrences = agg_by_bates.get(bates, [])
-    elif section_choice == "referred to":
-        new_occurrences = agg_refers.get(bates, [])
-    elif section_choice == "all":
-        new_occurrences = agg_by_bates.get(bates, [])
-    else:
-        new_occurrences = agg_by_bates.get(bates, [])
-    
-    if section_choice == "transcript":
-        new_occurrences = [f"Transcript: {occ}" for occ in new_occurrences]
-    
     # Retrieve any existing AttyNotes from the JSON.
     old_atty = {}
     if "AttyNotes" in existing_obj:
@@ -139,52 +121,99 @@ for bates, existing_obj in existing_annotations.items():
                 old_atty = {}
         elif isinstance(atty_value, dict):
             old_atty = atty_value
-    
-    # Extract old occurrences from the existing AttyNotes text.
+
+    # Extract old occurrences from existing AttyNotes (if any)
     old_occurrences = []
-    if "text" in old_atty:
+    if "text" in old_atty and old_atty["text"]:
         txt = old_atty["text"]
-        if section_choice in ["referenced in", "transcript"]:
+        if section_choice in ["referenced in", "transcript", "referred to"]:
             if txt.startswith(header) and txt.endswith(footer) and len(txt) > len(header) + len(footer):
                 middle = txt[len(header):-len(footer)]
                 old_occurrences = [x.strip() for x in middle.split("<br>") if x.strip()]
-            elif txt:
-                old_occurrences = [txt]
-        elif section_choice == "referred to":
-            if txt.startswith(header) and txt.endswith(footer) and len(txt) > len(header) + len(footer):
-                middle = txt[len(header):-len(footer)]
-                old_occurrences = [x.strip() for x in middle.split("<br>") if x.strip()]
-            elif txt:
+            else:
                 old_occurrences = [txt]
         elif section_choice == "all":
-            if txt:
-                old_occurrences = [txt]
-    
-    merged_occurrences = list(dict.fromkeys(old_occurrences + new_occurrences))
-    
-    # Build new AttyNotes text.
-    if section_choice in ["referenced in", "referred to", "transcript"]:
-        new_atty_text = header + " <br> ".join(merged_occurrences) + footer if merged_occurrences else ""
+            old_occurrences = [txt]
+
+    # Get new occurrences (if any)
+    if section_choice in ["referenced in", "transcript"]:
+        new_occurrences = agg_by_bates.get(bates, [])
+    elif section_choice == "referred to":
+        new_occurrences = agg_refers.get(bates, [])
     elif section_choice == "all":
-        new_atty_text = " <br> ".join(merged_occurrences) if merged_occurrences else ""
+        new_occurrences = agg_by_bates.get(bates, [])
     else:
-        new_atty_text = " <br> ".join(merged_occurrences)
+        new_occurrences = agg_by_bates.get(bates, [])
     
-    merged_atty = {
-        "text": new_atty_text,
-        "created": old_atty.get("created", int(datetime.datetime.now().timestamp() * 1000)),
-        "updated": None,
-        "parentType": "Document",
-        "parentId": 0,
-        "id": 0,
-        "user": user_email,
-        "unit": "point"
-    }
-    
+    if section_choice == "transcript":
+        new_occurrences = [f"Transcript: {occ}" for occ in new_occurrences]
+
     final_obj = existing_obj.copy()
-    final_obj["AttyNotes"] = json.dumps(merged_atty)
+    # If there are new occurrences, merge them with old occurrences.
+    if new_occurrences:
+        merged_occurrences = list(dict.fromkeys(old_occurrences + new_occurrences))
+        if section_choice in ["referenced in", "referred to", "transcript"]:
+            new_atty_text = header + " <br> ".join(merged_occurrences) + footer
+        elif section_choice == "all":
+            new_atty_text = " <br> ".join(merged_occurrences)
+        else:
+            new_atty_text = " <br> ".join(merged_occurrences)
+        merged_atty = {
+            "text": new_atty_text,
+            "created": old_atty.get("created", int(datetime.datetime.now().timestamp() * 1000)),
+            "updated": None,
+            "parentType": "Document",
+            "parentId": 0,
+            "id": 0,
+            "user": user_email,
+            "unit": "point"
+        }
+        final_obj["AttyNotes"] = json.dumps(merged_atty)
+    else:
+        # No new occurrences.
+        # If there are already existing AttyNotes with content, keep them.
+        if "AttyNotes" in final_obj:
+            try:
+                atty_obj = json.loads(final_obj["AttyNotes"])
+            except Exception:
+                atty_obj = {}
+            if atty_obj and atty_obj.get("text", "").strip():
+                pass  # keep existing AttyNotes as is
+            else:
+                # No content in AttyNotes: apply user preference.
+                if attynotes_empty_option == "B":
+                    merged_atty = {
+                        "text": "",
+                        "created": int(datetime.datetime.now().timestamp() * 1000),
+                        "updated": None,
+                        "parentType": "Document",
+                        "parentId": 0,
+                        "id": 0,
+                        "user": user_email,
+                        "unit": "point"
+                    }
+                    final_obj["AttyNotes"] = json.dumps(merged_atty)
+                elif attynotes_empty_option == "N":
+                    final_obj.pop("AttyNotes", None)
+        else:
+            # No existing AttyNotes at all: use user option.
+            if attynotes_empty_option == "B":
+                merged_atty = {
+                    "text": "",
+                    "created": int(datetime.datetime.now().timestamp() * 1000),
+                    "updated": None,
+                    "parentType": "Document",
+                    "parentId": 0,
+                    "id": 0,
+                    "user": user_email,
+                    "unit": "point"
+                }
+                final_obj["AttyNotes"] = json.dumps(merged_atty)
+            elif attynotes_empty_option == "N":
+                pass
+
     combined_json = json.dumps(final_obj)
-    
+
     # Produce output rows based on key_mode.
     if key_mode == "bates":
         # "referred to" mode: one row per Bates.
@@ -212,17 +241,10 @@ for bates, existing_obj in existing_annotations.items():
                 }
                 temp_obj = final_obj.copy()
                 temp_obj["AttyNotes"] = json.dumps(atty_obj_new)
-                # Only output a row for this Matched Text if it exists in the original annotations.
-                if matched_text in existing_annotations:
-                    updated_annotations.append({
-                        "Bates/Control #": matched_text,
-                        "Annotation Data": json.dumps(temp_obj)
-                    })
-                else:
-                    updated_annotations.append({
-                        "Bates/Control #": matched_text,
-                        "Annotation Data": json.dumps({"AttyNotes": json.dumps(atty_obj_new)})
-                    })
+                updated_annotations.append({
+                    "Bates/Control #": matched_text,
+                    "Annotation Data": json.dumps(temp_obj)
+                })
         else:
             updated_annotations.append({
                 "Bates/Control #": bates,
@@ -252,20 +274,14 @@ for bates, existing_obj in existing_annotations.items():
                 }
                 temp_obj = final_obj.copy()
                 temp_obj["AttyNotes"] = json.dumps(atty_obj_new)
-                if matched_text in existing_annotations:
-                    updated_annotations.append({
-                        "Bates/Control #": matched_text,
-                        "Annotation Data": json.dumps(temp_obj)
-                    })
-                else:
-                    updated_annotations.append({
-                        "Bates/Control #": matched_text,
-                        "Annotation Data": json.dumps({"AttyNotes": json.dumps(atty_obj_new)})
-                    })
+                updated_annotations.append({
+                    "Bates/Control #": matched_text,
+                    "Annotation Data": json.dumps(temp_obj)
+                })
         else:
             updated_annotations.append({
                 "Bates/Control #": bates,
-                "Annotation Data": json.dumps(final_obj)
+                "Annotation Data": combined_json
             })
     else:
         updated_annotations.append({
