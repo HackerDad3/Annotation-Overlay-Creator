@@ -10,6 +10,17 @@ import datetime
 # User email to show in notes
 user_email = "trial.solutions@advancediscovery.io"
 
+# My regex patterns
+regex_pattern = (
+    r'([A-Z]{3,5}\.\s*[A-Z0-9]{3,4}\.\s*[0-9]{3,4}\.\s*[0-9]{3,6}(_\d{4})?)|'
+    r'(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX)-[A-Z0-9]{3,4}(?:-[A-Z0-9]{2,4})?(_\d{4})?)|'
+    r'((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX)-[A-Z0-9]{2,4}(?:-[A-Z0-9]{2,4})?(_\d{4})?)|'
+    r'(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?)|'
+    r'(Exhibit\s+(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?))|'
+    r'((CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)|'
+    r'(Exhibit\s+(CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)'
+)
+
 document_number = input("Main Document number: ")
 
 # File paths: CSV of existing annotation data and directory of PDFs
@@ -32,8 +43,8 @@ annotation_output_csv = os.path.join(output_dir, f"{current_date}_{document_numb
 phrases_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_phrases_output.csv")
 
 # Constants for the stamp area (assumes each page has a Bates stamp at the top-right)
-STAMP_WIDTH = 100  # adjust width (points) as needed
-STAMP_HEIGHT = 50  # adjust height (points) as needed
+STAMP_WIDTH = 100  
+STAMP_HEIGHT = 50  
 
 # Initialize output containers
 annotation_data_list = []
@@ -44,7 +55,7 @@ added_annotations = set()
 
 def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", user=user_email):
     """Creates an annotation dictionary (if not already added) for a found hit.
-       Note: The notes text is now set to the matched text (same as markedText)."""
+       Note: The notes text is set to the matched text (same as markedText)."""
     timestamp = int(time() * 1000)
     annotation_data = {
         "rectangles": {
@@ -58,7 +69,7 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
         "updated": timestamp,
         "notes": [
             {
-                "text": f"<p>{marked_text}</p>",  # updated: using matched text instead of link
+                "text": f"<p>{marked_text}</p>",
                 "created": timestamp,
                 "parentType": "Highlight",
                 "parentId": 0,
@@ -84,89 +95,89 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
 # === Load existing annotation data ===
 # The CSV is expected to have columns: "Bates/Control #" and "Annotation Data"
 existing_df = pd.read_csv(existing_annotation_csv_file, delimiter=delimiter)
-existing_annotations = {}
+original_annotations = {}
 for index, row in existing_df.iterrows():
-    bates = str(row['Bates/Control #'])
-    annotation_json_str = row['Annotation Data']
+    bates = str(row['Bates/Control #']).strip()
+    json_str = row['Annotation Data']
     try:
-        annotation_obj = json.loads(annotation_json_str)
-        highlights_str = annotation_obj.get("Highlights", "")
-        if highlights_str:
-            # The annotations were stored as JSON strings joined by \u0013; convert each back to dict
-            annotations = [json.loads(x.replace('\\"', '"')) for x in highlights_str.split("\u0013") if x]
-        else:
-            annotations = []
-    except Exception as e:
-        annotations = []
-    existing_annotations[bates] = annotations
+        obj = json.loads(json_str)
+    except Exception:
+        obj = {}
+    original_annotations[bates] = obj
 
-# === Define the regex pattern ===
-regex_pattern = r'([A-Z]{3,5}\.\s*[A-Z0-9]{3,4}\.\s*[0-9]{3,4}\.\s*[0-9]{3,6}(_\d{4})?)|(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX)-\d{3,4}(_\d{4})?)|((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX)-\d{2,4}(_\d{4})?)|(REX-\d{3,4}\.\d{3,4}(_\d{4})?)|(Exhibit\s+(REX-\d{3,4}\.\d{3,4}(_\d{4})?))|((CC|RC|TC|JC)\.\d{3,4}[A-Z]?\.\d{3}(_\d{4})?)|(Exhibit\s+(CC|RC|TC|JC)\.\d{3,4}[A-Z]?\.\d{3}(_\d{4})?)'
-
-# === Gather all PDF files from directory and subdirectories ===
-pdf_files = []
-for root, dirs, files in os.walk(pdf_dir):
-    for file in files:
-        if file.lower().endswith('.pdf'):
-            pdf_files.append(os.path.join(root, file))
-
-# === Process each PDF file using a progress bar for total PDFs ===
-for pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
-    pdf_file = os.path.basename(pdf_path)
-    # The Bates number is assumed to be the file name without extension
-    bates = os.path.splitext(pdf_file)[0]
-    doc = fitz.open(pdf_path)
-    new_annotations = []
-    pdf_phrase_matches = []
-    
-    # Progress bar for pages in the current PDF file
-    for page_num in tqdm(range(len(doc)), desc=f"Processing pages in {pdf_file}", unit="page", leave=False):
-        page = doc.load_page(page_num)
-        page_rect = page.rect
-        # Define the stamp area (top-right corner)
-        stamp_area = fitz.Rect(page_rect.x1 - STAMP_WIDTH, page_rect.y0, page_rect.x1, page_rect.y0 + STAMP_HEIGHT)
-        page_text = page.get_text("text")
+# === Process each PDF file ===
+# Using an outer progress bar for files.
+for pdf_file in tqdm(os.listdir(pdf_dir), desc="Processing PDFs", unit="pdf"):
+    if pdf_file.lower().endswith('.pdf'):
+        full_pdf_path = os.path.join(pdf_dir, pdf_file)
+        bates = os.path.splitext(pdf_file)[0]
+        doc = fitz.open(full_pdf_path)
+        new_annotations = []
+        pdf_phrase_matches = []
         
-        # Search for regex hits on the page
-        for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
-            found_text = match.group(0)
-            # Use search_for to get all bounding boxes for the found text
-            for rect in page.search_for(found_text):
-                rect = fitz.Rect(rect)
-                # Check overlap with stamp area (skip if >50% of the hit lies in the stamp region)
-                intersection = rect & stamp_area
-                if rect.get_area() > 0 and (intersection.get_area() / rect.get_area() > 0.5):
-                    continue
-                annotation = create_annotation_data(rect, page_num, found_text)
-                if annotation:
-                    new_annotations.append(annotation)
-                    pdf_phrase_matches.append({
-                        'Bates/Control #': bates,
-                        'Found Text': found_text,
-                        'Page': page_num
-                    })
-    doc.close()
-    
-    # Merge any new annotations with existing ones for this Bates number
-    existing_annots = existing_annotations.get(bates, [])
-    combined_annots = existing_annots + new_annotations
-    
-    if combined_annots:
-        # Join each annotation (JSON-dumped and with escaped quotes) using \u0013 as the separator
-        combined_annotations_str = "\u0013".join([json.dumps(annot).replace('"', '\\"') for annot in combined_annots])
-        annotation_json = f'{{"Highlights":"{combined_annotations_str}"}}'
-    else:
-        annotation_json = '{"Highlights":""}'
-    
-    annotation_data_list.append({
-        'Bates/Control #': bates,
-        'Annotation Data': annotation_json
-    })
-    phrase_matches_list.extend(pdf_phrase_matches)
+        # Inner progress bar for pages.
+        for page_num in tqdm(range(len(doc)), desc=f"Processing pages in {pdf_file}", unit="page", leave=False):
+            page = doc.load_page(page_num)
+            page_rect = page.rect
+            stamp_area = fitz.Rect(page_rect.x1 - STAMP_WIDTH, page_rect.y0, page_rect.x1, page_rect.y0 + STAMP_HEIGHT)
+            page_text = page.get_text("text")
+            
+            for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
+                found_text = match.group(0)
+                for rect in page.search_for(found_text):
+                    rect = fitz.Rect(rect)
+                    intersection = rect & stamp_area
+                    if rect.get_area() > 0 and (intersection.get_area() / rect.get_area() > 0.5):
+                        continue
+                    annot = create_annotation_data(rect, page_num, found_text)
+                    if annot:
+                        new_annotations.append(annot)
+                        pdf_phrase_matches.append({
+                            'Bates/Control #': bates,
+                            'Found Text': found_text,
+                            'Page': page_num
+                        })
+        doc.close()
+        
+        # Merge new highlights with existing highlights only if new highlights are found.
+        orig_obj = original_annotations.get(bates, {})
+        if "Highlights" in orig_obj and orig_obj["Highlights"]:
+            try:
+                existing_highlights = [json.loads(x.replace('\\"','"')) for x in orig_obj["Highlights"].split("\u0013") if x]
+            except Exception:
+                existing_highlights = []
+        else:
+            existing_highlights = []
+        
+        if new_annotations:
+            # Deduplicate new highlights among themselves.
+            unique_new = []
+            seen = set()
+            for annot in new_annotations:
+                s = json.dumps(annot, sort_keys=True)
+                if s not in seen:
+                    seen.add(s)
+                    unique_new.append(annot)
+            # Deduplicate: always keep the original highlights; add only new highlights not present in the original.
+            orig_set = {json.dumps(a, sort_keys=True) for a in existing_highlights}
+            new_to_add = [annot for annot in unique_new if json.dumps(annot, sort_keys=True) not in orig_set]
+            combined_highlights = existing_highlights + new_to_add
+            combined_annotations_str = "\\u0013".join([json.dumps(annot).replace('"', '\\"') for annot in combined_highlights])
+            orig_obj["Highlights"] = combined_annotations_str
+        # If no new highlights, leave orig_obj unchanged.
+        
+        original_annotations[bates] = orig_obj
+        annotation_data_list.append({
+            'Bates/Control #': bates,
+            'Annotation Data': json.dumps(orig_obj) if orig_obj else ""
+        })
+        phrase_matches_list.extend(pdf_phrase_matches)
 
-# === Write the combined outputs to CSV files ===
+# === Write outputs to CSV files ===
 annotation_df = pd.DataFrame(annotation_data_list)
 phrase_matches_df = pd.DataFrame(phrase_matches_list)
 
 annotation_df.to_csv(annotation_output_csv, index=False, encoding='utf-8')
 phrase_matches_df.to_csv(phrases_output_csv, index=False, encoding='utf-8')
+print(f"Annotation CSV written to {annotation_output_csv}")
+print(f"Phrases CSV written to {phrases_output_csv}")
