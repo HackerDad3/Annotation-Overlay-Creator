@@ -168,7 +168,8 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         stamp_area = fitz.Rect(page_rect.x1 - STAMP_WIDTH, page_rect.y0, page_rect.x1, page_rect.y0 + STAMP_HEIGHT)
         page_text = page.get_text("text")
         
-        for match in re.finditer(regex_pattern, page_text, re.IGNORECASE):
+        # Case-sensitive matching: removed re.IGNORECASE flag.
+        for match in re.finditer(regex_pattern, page_text):
             found_text = match.group(0).strip()
             for rect in page.search_for(found_text):
                 rect = fitz.Rect(rect)
