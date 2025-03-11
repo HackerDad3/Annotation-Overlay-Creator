@@ -47,8 +47,8 @@ STAMP_HEIGHT = 50
 # -------------------------------
 # Output Containers
 # -------------------------------
-annotation_data_list = []  # Final updated annotation data per Bates
-phrase_matches_list = []   # Report for each matched phrase
+annotation_data_list = []  # Will be re-built after processing AttyNotes
+phrase_matches_list = []   # Record for each matched phrase (used later for AttyNotes)
 
 # Set to avoid duplicate annotations within this run (using tuple of markedText, cleaned note text, page, and rectangle coordinates)
 added_annotations = set()
@@ -64,7 +64,6 @@ def clean_note_for_key(note_text):
     note_text = note_text.strip()
     if note_text.startswith("<p>") and note_text.endswith("</p>"):
         note_text = note_text[3:-4].strip()
-    # Remove suffix if it ends with an underscore followed by exactly 4 digits.
     note_text = re.sub(r'_\d{4}$', '', note_text)
     return note_text
 
@@ -74,7 +73,7 @@ def clean_note_for_key(note_text):
 def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", user=user_email):
     timestamp = int(time() * 1000)
     marked_text = marked_text.strip()
-    # Remove the trailing _#### suffix for the note text only.
+    # For the note text we remove a trailing _#### suffix (if present) from the marked text.
     cleaned_note = re.sub(r'_\d{4}$', '', marked_text)
     note_text = f"<p>{cleaned_note}</p>"
     annotation_data = {
@@ -104,7 +103,7 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
         "unit": "point",
         "markedText": marked_text,
     }
-    # Use a consistent deduplication key with the cleaned note text.
+    # Deduplication key uses the marked text and the cleaned note text.
     annotation_key = (marked_text, cleaned_note, page_num, rect.x0, rect.y0, rect.width, rect.height)
     if annotation_key not in added_annotations:
         added_annotations.add(annotation_key)
@@ -112,19 +111,15 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
     return None
 
 # -------------------------------
-# Helper Function: Get Deduplication Key
+# Helper Function: Get Deduplication Key for Annotations
 # -------------------------------
 def get_dedup_key(annotation):
-    # Retrieve marked text.
     marked_text = annotation.get("markedText", "").strip()
-    # Retrieve note text from the first note if available.
     note_text = ""
     if annotation.get("notes") and len(annotation.get("notes")) > 0:
         note_text = annotation["notes"][0].get("text", "").strip()
-    # Clean note text for the key.
     note_key = clean_note_for_key(note_text)
     page_num = annotation.get("rectangles", {}).get("pageNum", 0)
-    # Get the rectangle details from the first rectangle in the list.
     rect_data = annotation.get("rectangles", {}).get("rectangles", [{}])[0]
     x = rect_data.get("x", 0)
     y = rect_data.get("y", 0)
@@ -163,6 +158,7 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
     bates = os.path.splitext(pdf_file)[0]
     doc = fitz.open(full_pdf_path)
     new_annotations = []
+    # Record phrase matches with document, found text, and page (pages are 0-indexed)
     pdf_phrase_matches = []
     
     # Inner progress bar for pages in the current PDF.
@@ -185,7 +181,7 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
                     pdf_phrase_matches.append({
                         'Bates/Control #': bates,
                         'Found Text': found_text,
-                        'Page': page_num
+                        'Page': page_num  # 0-indexed; will be converted later
                     })
     doc.close()
     
@@ -200,7 +196,6 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         existing_highlights = []
     
     if new_annotations:
-        # Deduplicate new highlights among themselves using the specified keys.
         unique_new = []
         seen = set()
         for annot in new_annotations:
@@ -208,21 +203,92 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
             if key not in seen:
                 seen.add(key)
                 unique_new.append(annot)
-        # Deduplicate new highlights against the existing ones (original data is master).
         existing_keys = {get_dedup_key(a) for a in existing_highlights}
         new_to_add = [annot for annot in unique_new if get_dedup_key(annot) not in existing_keys]
         combined_highlights = existing_highlights + new_to_add
-        # Join the JSON strings using the Unicode Unit Separator (\u0013)
         combined_annotations_str = "\u0013".join([json.dumps(annot) for annot in combined_highlights])
         orig_obj["Highlights"] = combined_annotations_str
-    # If no new highlights, leave orig_obj unchanged.
-    
     original_annotations[bates] = orig_obj
-    annotation_data_list.append({
-        'Bates/Control #': bates,
-        'Annotation Data': json.dumps(orig_obj) if orig_obj else ""
-    })
     phrase_matches_list.extend(pdf_phrase_matches)
+
+# -------------------------------
+# Update AttyNotes Data Based on Regex Matches
+# -------------------------------
+# For each document (Bates) in the original annotations, compute AttyNotes entries.
+# Pages are reported as 1-indexed (formatted as 4 digits).
+for bates in original_annotations:
+    refers_to_set = set()
+    referenced_in_set = set()
+    for rec in phrase_matches_list:
+        page_str = f"{rec['Page']+1:04d}"
+        # For the same document, remove the trailing _#### for display in "Refers To"
+        if rec['Bates/Control #'] == bates:
+            cleaned_text = re.sub(r'_\d{4}$', '', rec['Found Text'])
+            refers_to_set.add(f"{cleaned_text} at {page_str}")
+        else:
+            # For a different document, use the full found text (with suffix intact)
+            # to match if it equals the current Bates or starts with the Bates plus an underscore.
+            if rec['Found Text'] == bates or rec['Found Text'].startswith(bates + "_"):
+                referenced_in_set.add(f"{rec['Bates/Control #']} at {page_str}")
+    # Build the AttyNotes text with bold headers.
+    new_atty_text = (
+        "<p><strong>Refers To:</strong></p>\n<p>&nbsp;</p>\n" +
+        "\n".join(f"<p>{entry}</p>" for entry in sorted(refers_to_set)) +
+        "\n<p>&nbsp;</p>\n<p><strong>Referenced In:</strong></p>\n<p>&nbsp;</p>\n" +
+        "\n".join(f"<p>{entry}</p>" for entry in sorted(referenced_in_set)) +
+        "\n<p>&nbsp;</p>\n<p><strong>Transcript:</strong></p>"
+    )
+    timestamp = int(time() * 1000)
+    orig_obj = original_annotations[bates]
+    # Parse existing AttyNotes if present.
+    existing_atty = []
+    if "AttyNotes" in orig_obj and orig_obj["AttyNotes"]:
+        parts = orig_obj["AttyNotes"].split("\u0013")
+        for part in parts:
+            part = part.strip()
+            if part:
+                try:
+                    note_obj = json.loads(part)
+                    existing_atty.append(note_obj)
+                except Exception:
+                    pass
+
+    # Separate existing AttyNotes into non-trial and trial.
+    existing_non_trial = [a for a in existing_atty if a.get("user", "").lower() != "trial.solutions@advancediscovery.io"]
+    trial_existing = [a for a in existing_atty if a.get("user", "").lower() == "trial.solutions@advancediscovery.io"]
+    
+    if trial_existing:
+        existing_trial = trial_existing[0]
+        # Update only if the new AttyNotes text is not already present.
+        if new_atty_text not in existing_trial.get("text", ""):
+            existing_trial["text"] = new_atty_text
+            existing_trial["updated"] = timestamp
+        new_trial_record = existing_trial
+    else:
+        new_trial_record = {
+            "text": new_atty_text,
+            "created": timestamp,
+            "updated": timestamp,
+            "parentType": "Document",
+            "parentId": 0,
+            "id": 0,
+            "user": "trial.solutions@advancediscovery.io",
+            "unit": "point"
+        }
+    
+    # Append the trial.solutions note to any existing non-trial notes.
+    combined_atty_list = existing_non_trial + [new_trial_record]
+    combined_atty_str = "\u0013".join(json.dumps(note) for note in combined_atty_list)
+    orig_obj["AttyNotes"] = combined_atty_str
+    original_annotations[bates] = orig_obj
+
+# -------------------------------
+# Rebuild the Output List to Include Updated AttyNotes
+# -------------------------------
+annotation_data_list = [
+    {'Bates/Control #': bates, 'Annotation Data': json.dumps(obj) if obj else ""}
+    for bates, obj in original_annotations.items()
+]
 
 # -------------------------------
 # Write Outputs to CSV Files
