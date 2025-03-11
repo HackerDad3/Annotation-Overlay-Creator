@@ -11,7 +11,7 @@ import datetime
 # User Inputs
 # -------------------------------
 user_email = "trial.solutions@advancediscovery.io"
-project_information = input("Enter the project and database: ")
+project_information = input("Enter project and database: ")
 
 existing_annotation_csv_file = input("Paste CSV file path of existing annotations: ").strip().strip('"')
 pdf_directory = input("Paste directory containing PDF files: ").strip().strip('"')
@@ -214,9 +214,8 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
 # -------------------------------
 # Update AttyNotes Data Based on Regex Matches
 # -------------------------------
-# For each document (Bates) in the original annotations, compute AttyNotes entries.
-# Pages are reported as 1-indexed (formatted as 4 digits).
-for bates in original_annotations:
+# Add a progress bar for updating AttyNotes for each document.
+for bates in tqdm(list(original_annotations.keys()), desc="Updating AttyNotes", unit="document"):
     refers_to_set = set()
     referenced_in_set = set()
     for rec in phrase_matches_list:
@@ -259,7 +258,6 @@ for bates in original_annotations:
     
     if trial_existing:
         existing_trial = trial_existing[0]
-        # Update only if the new AttyNotes text is not already present.
         if new_atty_text not in existing_trial.get("text", ""):
             existing_trial["text"] = new_atty_text
             existing_trial["updated"] = timestamp
@@ -276,18 +274,17 @@ for bates in original_annotations:
             "unit": "point"
         }
     
-    # Append the trial.solutions note to any existing non-trial notes.
     combined_atty_list = existing_non_trial + [new_trial_record]
     combined_atty_str = "\u0013".join(json.dumps(note) for note in combined_atty_list)
     orig_obj["AttyNotes"] = combined_atty_str
     original_annotations[bates] = orig_obj
 
 # -------------------------------
-# Rebuild the Output List to Include Updated AttyNotes
+# Rebuild the Output List to Include Updated AttyNotes (with progress bar)
 # -------------------------------
 annotation_data_list = [
     {'Bates/Control #': bates, 'Annotation Data': json.dumps(obj) if obj else ""}
-    for bates, obj in original_annotations.items()
+    for bates, obj in tqdm(original_annotations.items(), desc="Rebuilding Output List", unit="document")
 ]
 
 # -------------------------------
