@@ -11,7 +11,7 @@ import datetime
 # User Inputs
 # -------------------------------
 user_email = "trial.solutions@advancediscovery.io"
-document_number = input("Main Document number: ")
+project_information = input("Enter the project and database: ")
 
 existing_annotation_csv_file = input("Paste CSV file path of existing annotations: ").strip().strip('"')
 pdf_directory = input("Paste directory containing PDF files: ").strip().strip('"')
@@ -26,8 +26,8 @@ delimiter = '\t' if existing_annotation_csv_file.endswith('.txt') else ','
 # Output paths
 output_dir = os.path.dirname(existing_annotation_csv_file)
 current_date = datetime.datetime.now().strftime("%Y%m%d")
-annotation_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_annotation_output.csv")
-phrases_output_csv = os.path.join(output_dir, f"{current_date}_{document_number}_combined_phrases_output.csv")
+annotation_output_csv = os.path.join(output_dir, f"{current_date}_{project_information}_combined_annotation_output.csv")
+phrases_output_csv = os.path.join(output_dir, f"{current_date}_{project_information}_combined_phrases_output.csv")
 
 # -------------------------------
 # Regex Pattern and Stamp Constants
