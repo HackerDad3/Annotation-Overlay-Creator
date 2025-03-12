@@ -34,10 +34,11 @@ phrases_output_csv = os.path.join(output_dir, f"{current_date}_{project_informat
 # -------------------------------
 regex_pattern = (
     r'([A-Z]{3,5}\.\s*[A-Z0-9]{3,4}\.\s*[0-9]{3,4}\.\s*[0-9]{3,6}(_\d{4})?)|'
-    r'(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}(?:-[A-Z0-9]{2,4})?(_\d{4})?(?:\.[A-Z0-9]{2,4})?)|'
-    r'((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}(?:-[A-Z0-9]{2,4})?(_\d{4})?(?:\.[A-Z0-9]{2,4})?)|'
+    r'(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}'
+    r'(?:[-.][A-Z0-9]{2,4})?(?:_\d{4})?)|'  # <-- Allows -007.001, -007.001_0078, -007_0001
+    r'((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}'
+    r'(?:[-.][A-Z0-9]{2,4})?(?:_\d{4})?)|'  # <-- Same fix applied
     r'(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?)|'
-    r'(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4})|'  
     r'(Exhibit\s+(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?))|'
     r'((CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)|'
     r'(Exhibit\s+(CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)'
