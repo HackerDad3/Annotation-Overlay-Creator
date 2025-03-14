@@ -34,16 +34,11 @@ phrases_output_csv = os.path.join(output_dir, f"{current_date}_{project_informat
 # -------------------------------
 regex_pattern = (
     r'([A-Z]{3,5}\.\s*[A-Z0-9]{3,4}\.\s*[0-9]{3,4}\.\s*[0-9]{3,6}(_\d{4})?)|'
-    r'(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}'
-    r'(?:[-.][A-Z0-9]{2,4})?(?:_\d{4})?)|'  # <-- Allows -007.001, -007.001_0078, -007_0001
-    r'((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM)-[A-Z0-9]{2,5}'
-    r'(?:[-.][A-Z0-9]{2,4})?(?:_\d{4})?)|'  # <-- Same fix applied
-    r'(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?)|'
-    r'(Exhibit\s+(REX-[A-Z0-9]{3,4}\.[A-Z0-9]{3,4}(_\d{4})?))|'
+    r'(Exhibit\s+(PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM|RWS)-[A-Z0-9]{3,4}(?:[-.][A-Z0-9]{2,4})?(_\d{4})?)|'
+    r'((PLE|CWS|CE|RE|CL|RL|TER|JER|CEX|REX|ORD|TRX|SBM|RWS)-[A-Z0-9]{2,4}(?:[-.][A-Z0-9]{2,4})?(_\d{4})?)|'
     r'((CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)|'
     r'(Exhibit\s+(CC|RC|TC|JC)\.[A-Z0-9]{3,4}[A-Z]?\.[A-Z0-9]{3}(_\d{4})?)'
 )
-
 STAMP_WIDTH = 100  
 STAMP_HEIGHT = 50  
 
@@ -114,7 +109,7 @@ def create_annotation_data(rect, page_num, marked_text, link="Auto Annotated", u
     return None
 
 # -------------------------------
-# Helper Function: Get Deduplication Key for Annotations
+# Helper Function: Get Deduplication Key for Annotations (updated with rounding)
 # -------------------------------
 def get_dedup_key(annotation):
     marked_text = annotation.get("markedText", "").strip()
@@ -124,10 +119,11 @@ def get_dedup_key(annotation):
     note_key = clean_note_for_key(note_text)
     page_num = annotation.get("rectangles", {}).get("pageNum", 0)
     rect_data = annotation.get("rectangles", {}).get("rectangles", [{}])[0]
-    x = rect_data.get("x", 0)
-    y = rect_data.get("y", 0)
-    width = rect_data.get("width", 0)
-    height = rect_data.get("height", 0)
+    # Round coordinates to 2 decimal places to avoid floating point differences
+    x = round(rect_data.get("x", 0), 2)
+    y = round(rect_data.get("y", 0), 2)
+    width = round(rect_data.get("width", 0), 2)
+    height = round(rect_data.get("height", 0), 2)
     return (marked_text, note_key, page_num, x, y, width, height)
 
 # -------------------------------
@@ -210,7 +206,7 @@ for full_pdf_path in tqdm(pdf_files, desc="Processing PDFs", unit="pdf"):
         existing_keys = {get_dedup_key(a) for a in existing_highlights}
         new_to_add = [annot for annot in unique_new if get_dedup_key(annot) not in existing_keys]
         combined_highlights = existing_highlights + new_to_add
-        combined_annotations_str = "\u0013".join([json.dumps(annot) for annot in combined_highlights])
+        combined_annotations_str = "\u0013".join([json.dumps(annot, separators=(',',':')) for annot in combined_highlights])
         orig_obj["Highlights"] = combined_annotations_str
     original_annotations[bates] = orig_obj
     phrase_matches_list.extend(pdf_phrase_matches)
@@ -279,7 +275,7 @@ for bates in tqdm(list(original_annotations.keys()), desc="Updating AttyNotes", 
         }
     
     combined_atty_list = existing_non_trial + [new_trial_record]
-    combined_atty_str = "\u0013".join(json.dumps(note) for note in combined_atty_list)
+    combined_atty_str = "\u0013".join(json.dumps(note, separators=(',',':')) for note in combined_atty_list)
     orig_obj["AttyNotes"] = combined_atty_str
     original_annotations[bates] = orig_obj
 
@@ -287,7 +283,7 @@ for bates in tqdm(list(original_annotations.keys()), desc="Updating AttyNotes", 
 # Rebuild the Output List to Include Updated AttyNotes (with progress bar)
 # -------------------------------
 annotation_data_list = [
-    {'Bates/Control #': bates, 'Annotation Data': json.dumps(obj) if obj else ""}
+    {'Bates/Control #': bates, 'Annotation Data': json.dumps(obj, separators=(',',':')) if obj else ""}
     for bates, obj in tqdm(original_annotations.items(), desc="Rebuilding Output List", unit="document")
 ]
 
